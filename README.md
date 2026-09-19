@@ -63,9 +63,20 @@ npm run dev
   Environment Variables (including `CRON_SECRET` — any long random
   string; Vercel Cron will send it automatically once the env var
   exists).
-- Vercel will pick up `vercel.json` and run `/api/admin/sync` every 5
-  minutes automatically. You can also trigger it manually the first
-  time: `curl -H "x-cron-secret: YOUR_CRON_SECRET" https://yoursite.vercel.app/api/admin/sync`.
+- Vercel Hobby plan only allows one cron run per day, so
+  `vercel.json` runs `/api/admin/sync` once daily (midnight UTC).
+  That only affects how fresh the *displayed* stock/price numbers
+  are — checkout always re-checks live DigiTrust stock before taking
+  payment and again right before the real purchase, so this never
+  risks overselling.
+  - Whenever you change stock/prices on DigiTrust and want the site
+    to reflect it sooner, either wait for the next daily sync, or
+    trigger it manually any time:
+    `curl -H "x-cron-secret: YOUR_CRON_SECRET" https://yoursite.vercel.app/api/admin/sync`
+  - If you later want automatic syncing more than once a day without
+    upgrading to Vercel Pro, point a free external scheduler (e.g.
+    cron-job.org) at that same URL with an `x-cron-secret` header —
+    no code changes needed.
 - Log in to `/admin`, tick the products you want to sell, set prices.
 
 ## Notes / things worth knowing

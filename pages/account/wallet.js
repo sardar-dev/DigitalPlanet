@@ -120,9 +120,11 @@ function describeError(code) {
     case "not_found_yet":
       return "That transaction isn't visible on-chain yet — wait a bit and try again.";
     case "chain_lookup_failed":
-      return "Couldn't reach the blockchain explorer right now — try again in a moment.";
+      return "Couldn't reach the blockchain right now — try again in a moment.";
+    case "tx_failed":
+      return "That transaction failed on-chain — it never went through.";
     case "wrong_recipient":
-      return "That transaction didn't go to our payout wallet.";
+      return "That transaction wasn't a USDT (BEP20) transfer to our wallet.";
     case "awaiting_confirmations":
       return "Payment seen, waiting for more confirmations — try again shortly.";
     case "tx_already_used":

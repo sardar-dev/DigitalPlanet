@@ -45,9 +45,8 @@ delivery happens automatically once the payment is confirmed on-chain.
 
 ### 3. USDT (BEP20) payments
 - Set `PAYOUT_WALLET_ADDRESS` to your BEP20 wallet.
-- Get a free API key at etherscan.io/apis (**not** bscscan.com — that
-  standalone API was deprecated in August 2025), set `ETHERSCAN_API_KEY`.
-  The same key works for BSC because it's now a unified multichain API.
+- No API key needed for payment verification — it reads transaction
+  receipts directly from free public BNB Smart Chain RPC nodes.
 - Leave `BSC_USDT_CONTRACT` as-is (it's USDT's real BEP20 contract).
 
 ### 4. Local dev

@@ -327,11 +327,11 @@ function describeError(code, available) {
     case "not_found_yet":
       return "That transaction isn't visible on-chain yet — wait a bit and try again.";
     case "chain_lookup_failed":
-      return "Couldn't reach the blockchain explorer right now — try again in a moment.";
-    case "etherscan_api_key_missing":
-      return "Payment verification isn't configured yet — contact support.";
+      return "Couldn't reach the blockchain right now — try again in a moment.";
+    case "tx_failed":
+      return "That transaction failed on-chain — it never went through.";
     case "wrong_recipient":
-      return "That transaction didn't go to our payout wallet.";
+      return "That transaction wasn't a USDT (BEP20) transfer to our wallet.";
     case "amount_too_low":
       return "The amount received doesn't match the order total.";
     case "awaiting_confirmations":

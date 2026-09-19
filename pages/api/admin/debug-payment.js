@@ -24,7 +24,6 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       env: {
-        ETHERSCAN_API_KEY_set: Boolean(process.env.ETHERSCAN_API_KEY),
         BSC_USDT_CONTRACT: process.env.BSC_USDT_CONTRACT || null,
         PAYOUT_WALLET_ADDRESS: process.env.PAYOUT_WALLET_ADDRESS || null,
         MIN_CONFIRMATIONS: process.env.MIN_CONFIRMATIONS || "3 (default)",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 
@@ -7,6 +7,7 @@ export default function Storefront() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null); // product being purchased
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -18,14 +19,29 @@ export default function Storefront() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Filtering happens entirely in the browser — no extra requests to
+  // our server per keystroke, since we already have the full list.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        (p.description || "").toLowerCase().includes(q)
+    );
+  }, [products, search]);
+
   return (
     <div className="min-h-screen bg-paper text-ink font-body">
       <header className="border-b border-line">
-        <div className="max-w-3xl mx-auto px-6 py-6 flex items-baseline justify-between">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
           <span className="font-display text-2xl">Ledger Stock</span>
-          <nav className="text-sm space-x-5">
+          <nav className="text-sm space-x-4 sm:space-x-5">
             {session ? (
               <>
+                <Link href="/account/wallet" className="hover:underline">
+                  Wallet
+                </Link>
                 <Link href="/account/orders" className="hover:underline">
                   My orders
                 </Link>
@@ -50,21 +66,34 @@ export default function Storefront() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-10">
-        <p className="text-sm text-wire mb-8 max-w-md">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        <p className="text-sm text-wire mb-6 max-w-md">
           Every item here is confirmed in stock right now. Pay in USDT
           (BEP20) and delivery happens automatically once your
           transaction is confirmed on-chain.
         </p>
 
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search products…"
+          className="w-full mb-6 border border-line px-3 py-2 bg-paper text-sm"
+        />
+
         {loading && <p className="text-sm">Loading stock…</p>}
         {!loading && products.length === 0 && (
           <p className="text-sm text-wire">Nothing in stock right now — check back soon.</p>
         )}
+        {!loading && products.length > 0 && visible.length === 0 && (
+          <p className="text-sm text-wire">No products match "{search}".</p>
+        )}
 
         <ul className="divide-y divide-line border-t border-b border-line">
-          {products.map((p) => (
-            <li key={p.id} className="py-5 flex items-center justify-between gap-4">
+          {visible.map((p) => (
+            <li
+              key={p.id}
+              className="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
               <div>
                 <div className="font-display text-lg">{p.title}</div>
                 {p.description && (
@@ -98,19 +127,32 @@ export default function Storefront() {
 }
 
 function BuyModal({ product, onClose }) {
-  const [step, setStep] = useState("form"); // form | pay | verifying | done | error
+  const [step, setStep] = useState("form"); // form | pay | verifying | done
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState(null);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [items, setItems] = useState(null);
+  const [balance, setBalance] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("balance")
+        .eq("id", session.user.id)
+        .single();
+      setBalance(Number(data?.balance || 0));
+    })();
+  }, []);
 
   async function createOrder() {
     setError("");
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
     const res = await fetch("/api/orders/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -123,6 +165,24 @@ function BuyModal({ product, onClose }) {
     }
     setOrder(data.order);
     setStep("pay");
+  }
+
+  async function payWithBalance() {
+    setError("");
+    setStep("verifying");
+    const res = await fetch("/api/orders/pay-with-balance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order_id: order.id }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setItems(data.items);
+      setStep("done");
+    } else {
+      setError(describeError(data.error));
+      setStep("pay");
+    }
   }
 
   async function submitPayment() {
@@ -143,9 +203,11 @@ function BuyModal({ product, onClose }) {
     }
   }
 
+  const canPayWithBalance = balance !== null && order && balance >= Number(order.total);
+
   return (
     <div className="fixed inset-0 bg-ink/60 flex items-center justify-center p-4">
-      <div className="bg-paper max-w-md w-full p-6 border border-line">
+      <div className="bg-paper max-w-md w-full p-6 border border-line max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-start mb-4">
           <h2 className="font-display text-xl">{product.title}</h2>
           <button onClick={onClose} className="text-sm text-wire hover:text-ink">
@@ -189,8 +251,23 @@ function BuyModal({ product, onClose }) {
 
         {step === "pay" && order && (
           <div className="space-y-4 text-sm">
+            {canPayWithBalance && (
+              <div className="border border-line p-3 bg-white space-y-2">
+                <p>
+                  Wallet balance: <span className="font-mono">${balance.toFixed(2)}</span> —
+                  enough to pay instantly.
+                </p>
+                <button
+                  onClick={payWithBalance}
+                  className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors"
+                >
+                  Pay ${Number(order.total).toFixed(2)} with wallet balance
+                </button>
+              </div>
+            )}
+
             <p>
-              Send exactly{" "}
+              Or send exactly{" "}
               <span className="font-mono text-base">${Number(order.total).toFixed(4)}</span>{" "}
               USDT on the <strong>BEP20 (BNB Smart Chain)</strong> network to:
             </p>
@@ -222,13 +299,13 @@ function BuyModal({ product, onClose }) {
         )}
 
         {step === "verifying" && (
-          <p className="text-sm text-wire">Checking the blockchain — this can take a moment…</p>
+          <p className="text-sm text-wire">Checking — this can take a moment…</p>
         )}
 
         {step === "done" && (
           <div className="space-y-3 text-sm">
             <p>Delivered. Save these now:</p>
-            <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono">
+            <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">
               {(items || []).join("\n")}
             </pre>
             <button onClick={onClose} className="w-full py-2 bg-ink text-paper">
@@ -261,6 +338,8 @@ function describeError(code, available) {
       return "Payment seen, waiting for more confirmations — try again shortly.";
     case "tx_already_used":
       return "That transaction hash was already used on another order.";
+    case "insufficient_balance":
+      return "Not enough wallet balance for this order.";
     case "out_of_stock_refund_pending":
       return "Sold out at the last moment — your payment will be refunded manually, sorry.";
     default:

@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   is_admin boolean not null default false,
+  balance numeric not null default 0,   -- USDT store-credit balance
   created_at timestamptz not null default now()
 );
 
@@ -73,7 +74,7 @@ create table if not exists public.orders (
 
   status text not null default 'pending_payment',
   -- pending_payment | payment_submitted | paid | fulfilling
-  -- | delivered | failed | refunded
+  -- | delivered | failed | refunded | cancelled
 
   payout_wallet text not null,
   expected_amount numeric not null,
@@ -82,6 +83,7 @@ create table if not exists public.orders (
   digitrust_order_id bigint,
   items jsonb,                         -- delivered credentials, once fulfilled
   failure_reason text,
+  paid_with text not null default 'onchain', -- 'onchain' | 'wallet_balance'
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -97,10 +99,27 @@ create policy "orders: user can create own orders"
   on public.orders for insert
   with check (auth.uid() = user_id);
 
--- Status/payment updates (marking paid, attaching tx_hash, delivering
--- items) happen only through server API routes using the service
--- role key, which bypasses RLS — customers cannot self-mark an order
--- as paid or edit delivered items.
-
 create index if not exists orders_user_id_idx on public.orders (user_id);
 create index if not exists orders_status_idx on public.orders (status);
+
+-- ─────────────────────────────────────────────────────────────
+-- wallet_topups: USDT (BEP20) deposits that credit a user's
+-- store-credit balance, so they can check out instantly next time
+-- without an on-chain wait per order.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.wallet_topups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id),
+  tx_hash text not null unique,        -- unique stops the same tx being credited twice
+  amount numeric not null,
+  status text not null default 'credited', -- credited | rejected
+  created_at timestamptz not null default now()
+);
+
+alter table public.wallet_topups enable row level security;
+
+create policy "wallet_topups: user can read own topups"
+  on public.wallet_topups for select
+  using (auth.uid() = user_id);
+
+create index if not exists wallet_topups_user_id_idx on public.wallet_topups (user_id);

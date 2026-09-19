@@ -92,9 +92,42 @@ npm run dev
 - **Payment matching**: since BEP20 transfers have no memo field,
   matching relies on the tx hash the customer submits plus checking
   the amount/recipient on-chain. A tx hash can only be used once
-  across all orders.
+  across all orders AND wallet top-ups.
+- **Wallet balance**: customers can send USDT any time (not tied to
+  an order) and credit their balance at `/account/wallet`. At
+  checkout, if their balance covers the total, they get an instant
+  "pay with balance" option instead of waiting on a fresh on-chain
+  confirmation. This also cuts down how often you're hitting the
+  Etherscan API — most orders after the first top-up don't need an
+  on-chain lookup at all.
+- **Order controls**: customers can cancel their own still-unpaid
+  orders (`/account/orders`). Admins (`/admin` → Orders tab) can
+  cancel, mark refunded, or permanently delete orders — delete is for
+  junk/abandoned orders, not anything with real money attached (use
+  cancel/refund for those so there's a record).
+- **Debug payment tool** (`/admin` → Debug payment tab): paste any tx
+  hash to see exactly what the on-chain lookup found — which env var
+  is missing, how many transfers were seen for your wallet, wrong
+  recipient, etc. Use this first whenever "payment verification isn't
+  working."
+- **Search**: both the storefront and the admin Products/Orders tables
+  have a search box. Filtering happens entirely in the browser against
+  data already fetched — no extra server requests per keystroke.
+- **Reducing server load**: `/api/products` is cached at Vercel's edge
+  for 30s (`Cache-Control: s-maxage=30`), so repeat storefront visits
+  are served from cache instead of hitting Supabase every time.
+  Sorting/searching/filtering all happen client-side against data
+  already in the browser. None of this affects checkout safety — that
+  always re-checks live DigiTrust stock regardless of any cache.
 - **Refunds** are manual by design — if DigiTrust sells out between
   payment and fulfillment (rare), the order is marked `failed` and you
-  refund the USDT by hand, then mark it `refunded` in `/admin`.
+  refund the USDT (or wallet balance) by hand, then mark it `refunded`
+  in `/admin`.
 - **Domain**: not wired up yet — once you buy one, add it in Vercel →
   Settings → Domains.
+
+## If you already ran schema.sql before this update
+
+Run `supabase/migration_002_wallet.sql` in the SQL Editor — it adds
+the wallet balance column and top-ups table without touching your
+existing data.

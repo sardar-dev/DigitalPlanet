@@ -1,7 +1,7 @@
 import { createPagesServerClient } from "@supabase/auth-helpers-nextjs";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 import { verifyUsdtPayment } from "../../../lib/bscscan";
-import { getProduct, applyStockBuffer, purchase } from "../../../lib/digitrust";
+import { fulfillOrder } from "../../../lib/fulfillOrder";
 
 // Step 2 of checkout: customer submits the tx hash of their USDT
 // (BEP20) transfer. We verify it on-chain, and if it checks out we
@@ -42,15 +42,20 @@ export default async function handler(req, res) {
   }
 
   // Prevent the same on-chain transaction being used to pay for two
-  // different orders.
-  const { data: reused } = await supabaseAdmin
+  // different orders (or an order + a wallet top-up).
+  const { data: reusedOrder } = await supabaseAdmin
     .from("orders")
     .select("id")
     .eq("tx_hash", tx_hash)
     .neq("id", order.id)
     .maybeSingle();
+  const { data: reusedTopup } = await supabaseAdmin
+    .from("wallet_topups")
+    .select("id")
+    .eq("tx_hash", tx_hash)
+    .maybeSingle();
 
-  if (reused) {
+  if (reusedOrder || reusedTopup) {
     return res.status(409).json({ success: false, error: "tx_already_used" });
   }
 
@@ -65,8 +70,8 @@ export default async function handler(req, res) {
   });
 
   if (!verdict.ok) {
-    // Roll back to pending_payment so the customer (or a retry / the
-    // sync cron) can try verification again once the tx confirms.
+    // Roll back to pending_payment so the customer (or a retry) can
+    // try verification again once the tx confirms.
     await supabaseAdmin
       .from("orders")
       .update({ status: "pending_payment", updated_at: new Date().toISOString() })
@@ -79,52 +84,9 @@ export default async function handler(req, res) {
     .update({ status: "paid", updated_at: new Date().toISOString() })
     .eq("id", order.id);
 
-  // Final live stock check, then buy for real. If DigiTrust is out of
-  // stock at this exact moment, the order is marked failed and money
-  // stays with us pending a manual refund — it was never at risk of
-  // being spent twice since DigiTrust only takes one purchase at a
-  // time per key.
-  try {
-    const { product } = await getProduct(order.product_id);
-    const live = applyStockBuffer(product);
-    if (live.available_stock < order.quantity) {
-      await supabaseAdmin
-        .from("orders")
-        .update({
-          status: "failed",
-          failure_reason: "out_of_stock_at_fulfillment",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
-      return res.status(409).json({ success: false, error: "out_of_stock_refund_pending" });
-    }
-
-    const result = await purchase({
-      productId: order.product_id,
-      quantity: order.quantity,
-      email: order.email || undefined,
-    });
-
-    await supabaseAdmin
-      .from("orders")
-      .update({
-        status: "delivered",
-        digitrust_order_id: result.order.id,
-        items: result.order.items,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id);
-
-    return res.status(200).json({ success: true, items: result.order.items });
-  } catch (e) {
-    await supabaseAdmin
-      .from("orders")
-      .update({
-        status: "failed",
-        failure_reason: e.message || "fulfillment_error",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id);
-    return res.status(502).json({ success: false, error: "fulfillment_failed_refund_pending" });
+  const result = await fulfillOrder(order);
+  if (!result.success) {
+    return res.status(502).json({ success: false, error: result.error });
   }
+  return res.status(200).json({ success: true, items: result.items });
 }

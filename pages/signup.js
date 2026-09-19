@@ -15,7 +15,14 @@ export default function Signup() {
     setLoading(true);
     const { error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
-    if (error) return setError(error.message);
+    if (error) {
+      if (error.message?.toLowerCase().includes("rate limit")) {
+        return setError(
+          "Too many signups right now — please wait a few minutes and try again."
+        );
+      }
+      return setError(error.message);
+    }
     setDone(true);
   }
 

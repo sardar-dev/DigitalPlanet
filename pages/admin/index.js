@@ -7,6 +7,7 @@ export default function Admin() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState("products");
+  const [sortAvailableFirst, setSortAvailableFirst] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -67,6 +68,10 @@ export default function Admin() {
   if (!allowed)
     return <p className="p-8 text-sm">This account doesn't have admin access.</p>;
 
+  const visibleProducts = sortAvailableFirst
+    ? [...products].sort((a, b) => b.available_stock - a.available_stock)
+    : products;
+
   return (
     <div className="min-h-screen bg-paper text-ink font-body">
       <header className="border-b border-line">
@@ -91,46 +96,65 @@ export default function Admin() {
 
       <main className="max-w-4xl mx-auto px-6 py-10">
         {tab === "products" && (
-          <table className="w-full text-sm border-t border-line">
-            <thead>
-              <tr className="text-left text-wire border-b border-line">
-                <th className="py-2 pr-2">Product</th>
-                <th className="py-2 pr-2">Real stock</th>
-                <th className="py-2 pr-2">Shown as</th>
-                <th className="py-2 pr-2">Your price</th>
-                <th className="py-2 pr-2">Show on site</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.id} className="border-b border-line">
-                  <td className="py-2 pr-2">{p.title}</td>
-                  <td className="py-2 pr-2 font-mono">{p.real_stock}</td>
-                  <td className="py-2 pr-2 font-mono">{p.available_stock}</td>
-                  <td className="py-2 pr-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      defaultValue={p.sell_price}
-                      onBlur={(e) =>
-                        updateProduct(p.id, { sell_price: Number(e.target.value) })
-                      }
-                      className="w-24 border border-line px-2 py-1 font-mono"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <input
-                      type="checkbox"
-                      checked={p.selected}
-                      onChange={(e) =>
-                        updateProduct(p.id, { selected: e.target.checked })
-                      }
-                    />
-                  </td>
+          <>
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={() => setSortAvailableFirst((s) => !s)}
+                className="text-sm px-3 py-1.5 border border-line hover:bg-white"
+              >
+                {sortAvailableFirst ? "Sorted: in-stock first ✓" : "Sort: in-stock first"}
+              </button>
+            </div>
+            <table className="w-full text-sm border-t border-line">
+              <thead>
+                <tr className="text-left text-wire border-b border-line">
+                  <th className="py-2 pr-2">Product</th>
+                  <th className="py-2 pr-2">Real stock</th>
+                  <th className="py-2 pr-2">Shown as</th>
+                  <th className="py-2 pr-2">DigiTrust price</th>
+                  <th className="py-2 pr-2">Your price</th>
+                  <th className="py-2 pr-2">Show on site</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleProducts.map((p) => (
+                  <tr
+                    key={p.id}
+                    className={`border-b border-line ${
+                      p.available_stock === 0 ? "opacity-50" : ""
+                    }`}
+                  >
+                    <td className="py-2 pr-2">{p.title}</td>
+                    <td className="py-2 pr-2 font-mono">{p.real_stock}</td>
+                    <td className="py-2 pr-2 font-mono">{p.available_stock}</td>
+                    <td className="py-2 pr-2 font-mono text-wire">
+                      ${Number(p.cost_price).toFixed(2)}
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        defaultValue={p.sell_price}
+                        onBlur={(e) =>
+                          updateProduct(p.id, { sell_price: Number(e.target.value) })
+                        }
+                        className="w-24 border border-line px-2 py-1 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={p.selected}
+                        onChange={(e) =>
+                          updateProduct(p.id, { selected: e.target.checked })
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
 
         {tab === "orders" && (

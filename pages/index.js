@@ -249,6 +249,10 @@ function describeError(code, available) {
       return "This product needs an email address for delivery.";
     case "not_found_yet":
       return "That transaction isn't visible on-chain yet — wait a bit and try again.";
+    case "chain_lookup_failed":
+      return "Couldn't reach the blockchain explorer right now — try again in a moment.";
+    case "etherscan_api_key_missing":
+      return "Payment verification isn't configured yet — contact support.";
     case "wrong_recipient":
       return "That transaction didn't go to our payout wallet.";
     case "amount_too_low":

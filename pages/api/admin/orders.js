@@ -16,18 +16,30 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    // Body: { id, status } — manual override, e.g. marking a failed
-    // order as "refunded" once you've sent the USDT back by hand, or
-    // cancelling a stuck order.
-    const { id, status } = req.body || {};
-    const allowed = ["refunded", "failed", "delivered", "cancelled", "pending_payment"];
+    // Body: { id, status, items?, digitrust_order_id? } — manual
+    // override, e.g. marking a failed order "refunded" once you've
+    // sent funds back by hand, cancelling a stuck order, or resolving
+    // a "needs_reconciliation" order after checking DigiTrust's own
+    // order history (mark delivered with the actual items, or fail
+    // it for a refund if it turns out nothing was purchased).
+    const { id, status, items, digitrust_order_id } = req.body || {};
+    const allowed = [
+      "refunded",
+      "failed",
+      "delivered",
+      "cancelled",
+      "pending_payment",
+    ];
     if (!id || !allowed.includes(status)) {
       return res.status(400).json({ success: false, error: "invalid_request" });
     }
-    const { error } = await supabaseAdmin
-      .from("orders")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", id);
+    const patch = { status, updated_at: new Date().toISOString() };
+    if (status === "delivered" && items) {
+      patch.items = Array.isArray(items) ? items : String(items).split("\n").filter(Boolean);
+    }
+    if (digitrust_order_id) patch.digitrust_order_id = digitrust_order_id;
+
+    const { error } = await supabaseAdmin.from("orders").update(patch).eq("id", id);
     if (error) return res.status(500).json({ success: false, error: error.message });
     return res.status(200).json({ success: true });
   }

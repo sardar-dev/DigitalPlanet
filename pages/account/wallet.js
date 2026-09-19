@@ -8,6 +8,7 @@ export default function Wallet() {
   const [txHash, setTxHash] = useState("");
   const [status, setStatus] = useState("idle"); // idle | verifying | done | error
   const [message, setMessage] = useState("");
+  const [ledger, setLedger] = useState([]);
 
   useEffect(() => {
     load();
@@ -31,6 +32,45 @@ export default function Wallet() {
     const walletRes = await fetch("/api/payout-wallet");
     const walletData = await walletRes.json();
     setPayoutWallet(walletData.address || "");
+
+    const [{ data: topups }, { data: adjustments }, { data: spentOrders }] = await Promise.all([
+      supabase
+        .from("wallet_topups")
+        .select("id, amount, created_at")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("wallet_adjustments")
+        .select("id, amount, reason, created_at")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("id, total, created_at, products(title)")
+        .eq("paid_with", "wallet_balance")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const entries = [
+      ...(topups || []).map((t) => ({
+        id: `topup-${t.id}`,
+        date: t.created_at,
+        label: "Top-up",
+        amount: Number(t.amount),
+      })),
+      ...(adjustments || []).map((a) => ({
+        id: `adj-${a.id}`,
+        date: a.created_at,
+        label: `Adjustment — ${a.reason}`,
+        amount: Number(a.amount),
+      })),
+      ...(spentOrders || []).map((o) => ({
+        id: `order-${o.id}`,
+        date: o.created_at,
+        label: `Purchase — ${o.products?.title || "product"}`,
+        amount: -Number(o.total),
+      })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    setLedger(entries);
   }
 
   async function submitTopup() {
@@ -43,10 +83,10 @@ export default function Wallet() {
     });
     const data = await res.json();
     if (data.success) {
-      setBalance(data.balance);
       setStatus("done");
       setTxHash("");
       setMessage(`Credited $${data.credited.toFixed(2)}.`);
+      load();
     } else {
       setStatus("error");
       setMessage(describeError(data.error));
@@ -109,6 +149,29 @@ export default function Wallet() {
           >
             {status === "verifying" ? "Checking…" : "Verify & credit"}
           </button>
+        </div>
+
+        <div>
+          <h2 className="font-display text-lg mb-3">History</h2>
+          {ledger.length === 0 && (
+            <p className="text-sm text-wire">Nothing yet.</p>
+          )}
+          <ul className="divide-y divide-line border-t border-b border-line text-sm">
+            {ledger.map((entry) => (
+              <li key={entry.id} className="py-3 flex justify-between gap-3">
+                <div>
+                  <div>{entry.label}</div>
+                  <div className="text-xs text-wire">
+                    {new Date(entry.date).toLocaleString()}
+                  </div>
+                </div>
+                <span className={`font-mono ${entry.amount < 0 ? "text-signal" : ""}`}>
+                  {entry.amount >= 0 ? "+" : ""}
+                  {entry.amount.toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import PaymentPanel from "../../components/PaymentPanel";
 
 const STATUS_LABEL = {
   pending_payment: "Waiting for payment",
@@ -11,10 +12,12 @@ const STATUS_LABEL = {
   failed: "Failed — refund pending",
   refunded: "Refunded",
   cancelled: "Cancelled",
+  needs_reconciliation: "Confirming delivery — hang tight",
 };
 
 export default function Orders() {
   const [orders, setOrders] = useState(null);
+  const [resuming, setResuming] = useState(null); // order id being resumed
 
   useEffect(() => {
     load();
@@ -78,14 +81,42 @@ export default function Orders() {
                 {STATUS_LABEL[o.status] || o.status} ·{" "}
                 {new Date(o.created_at).toLocaleString()}
               </div>
-              {o.status === "pending_payment" && (
-                <button
-                  onClick={() => cancelOrder(o.id)}
-                  className="text-xs underline text-signal mt-2"
-                >
-                  Cancel order
-                </button>
+
+              {o.status === "pending_payment" && resuming !== o.id && (
+                <div className="flex gap-3 mt-2">
+                  <button
+                    onClick={() => setResuming(o.id)}
+                    className="text-xs underline"
+                  >
+                    Continue payment
+                  </button>
+                  <button
+                    onClick={() => cancelOrder(o.id)}
+                    className="text-xs underline text-signal"
+                  >
+                    Cancel order
+                  </button>
+                </div>
               )}
+
+              {o.status === "pending_payment" && resuming === o.id && (
+                <div className="mt-3 border border-line p-4 bg-white">
+                  <PaymentPanel
+                    order={o}
+                    onDone={() => {
+                      setResuming(null);
+                      load();
+                    }}
+                  />
+                  <button
+                    onClick={() => setResuming(null)}
+                    className="text-xs underline text-wire mt-3"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+
               {o.status === "delivered" && o.items?.length > 0 && (
                 <pre className="mt-2 bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">
                   {o.items.join("\n")}

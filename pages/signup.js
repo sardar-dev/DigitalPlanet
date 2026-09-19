@@ -13,7 +13,7 @@ export default function Signup() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (error) {
       if (error.message?.toLowerCase().includes("rate limit")) {
@@ -22,6 +22,12 @@ export default function Signup() {
         );
       }
       return setError(error.message);
+    }
+    if (data.session) {
+      // Email confirmation is disabled on this project — the user is
+      // already signed in, no need to tell them to check their inbox.
+      window.location.href = "/";
+      return;
     }
     setDone(true);
   }

@@ -1,23 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
+import PaymentPanel from "../components/PaymentPanel";
 
 export default function Storefront() {
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [active, setActive] = useState(null); // product being purchased
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    fetch("/api/products")
-      .then((r) => r.json())
-      .then((d) => setProducts(d.products || []))
-      .finally(() => setLoading(false));
+    loadProducts();
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  function loadProducts() {
+    setLoading(true);
+    setLoadError(false);
+    fetch("/api/products")
+      .then((r) => {
+        if (!r.ok) throw new Error("bad_status");
+        return r.json();
+      })
+      .then((d) => {
+        if (!d.success) throw new Error("bad_response");
+        setProducts(d.products || []);
+      })
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  }
 
   // Filtering happens entirely in the browser — no extra requests to
   // our server per keystroke, since we already have the full list.
@@ -81,10 +96,18 @@ export default function Storefront() {
         />
 
         {loading && <p className="text-sm">Loading stock…</p>}
-        {!loading && products.length === 0 && (
+        {loadError && (
+          <div className="text-sm text-signal space-y-2">
+            <p>Couldn't load products right now — something's wrong on our end.</p>
+            <button onClick={loadProducts} className="underline">
+              Try again
+            </button>
+          </div>
+        )}
+        {!loading && !loadError && products.length === 0 && (
           <p className="text-sm text-wire">Nothing in stock right now — check back soon.</p>
         )}
-        {!loading && products.length > 0 && visible.length === 0 && (
+        {!loading && !loadError && products.length > 0 && visible.length === 0 && (
           <p className="text-sm text-wire">No products match "{search}".</p>
         )}
 
@@ -127,29 +150,12 @@ export default function Storefront() {
 }
 
 function BuyModal({ product, onClose }) {
-  const [step, setStep] = useState("form"); // form | pay | verifying | done
+  const [step, setStep] = useState("form"); // form | order | done
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState(null);
-  const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [items, setItems] = useState(null);
-  const [balance, setBalance] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("balance")
-        .eq("id", session.user.id)
-        .single();
-      setBalance(Number(data?.balance || 0));
-    })();
-  }, []);
 
   async function createOrder() {
     setError("");
@@ -164,46 +170,8 @@ function BuyModal({ product, onClose }) {
       return;
     }
     setOrder(data.order);
-    setStep("pay");
+    setStep("order");
   }
-
-  async function payWithBalance() {
-    setError("");
-    setStep("verifying");
-    const res = await fetch("/api/orders/pay-with-balance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: order.id }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setItems(data.items);
-      setStep("done");
-    } else {
-      setError(describeError(data.error));
-      setStep("pay");
-    }
-  }
-
-  async function submitPayment() {
-    setError("");
-    setStep("verifying");
-    const res = await fetch("/api/orders/verify-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: order.id, tx_hash: txHash }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setItems(data.items);
-      setStep("done");
-    } else {
-      setError(describeError(data.error));
-      setStep("pay");
-    }
-  }
-
-  const canPayWithBalance = balance !== null && order && balance >= Number(order.total);
 
   return (
     <div className="fixed inset-0 bg-ink/60 flex items-center justify-center p-4">
@@ -249,57 +217,14 @@ function BuyModal({ product, onClose }) {
           </div>
         )}
 
-        {step === "pay" && order && (
-          <div className="space-y-4 text-sm">
-            {canPayWithBalance && (
-              <div className="border border-line p-3 bg-white space-y-2">
-                <p>
-                  Wallet balance: <span className="font-mono">${balance.toFixed(2)}</span> —
-                  enough to pay instantly.
-                </p>
-                <button
-                  onClick={payWithBalance}
-                  className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors"
-                >
-                  Pay ${Number(order.total).toFixed(2)} with wallet balance
-                </button>
-              </div>
-            )}
-
-            <p>
-              Or send exactly{" "}
-              <span className="font-mono text-base">${Number(order.total).toFixed(4)}</span>{" "}
-              USDT on the <strong>BEP20 (BNB Smart Chain)</strong> network to:
-            </p>
-            <p className="font-mono text-xs break-all bg-white border border-line p-3">
-              {order.payout_wallet}
-            </p>
-            <p className="text-wire">
-              Sending on any other network will lose the funds — double-check
-              BEP20 before sending.
-            </p>
-            <label className="block">
-              Transaction hash
-              <input
-                value={txHash}
-                onChange={(e) => setTxHash(e.target.value)}
-                placeholder="0x…"
-                className="w-full mt-1 border border-line px-3 py-2 bg-paper font-mono text-xs"
-              />
-            </label>
-            {error && <p className="text-signal">{error}</p>}
-            <button
-              onClick={submitPayment}
-              disabled={!txHash}
-              className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-            >
-              I've sent it — verify payment
-            </button>
-          </div>
-        )}
-
-        {step === "verifying" && (
-          <p className="text-sm text-wire">Checking — this can take a moment…</p>
+        {step === "order" && order && (
+          <PaymentPanel
+            order={order}
+            onDone={(deliveredItems) => {
+              setItems(deliveredItems);
+              setStep("done");
+            }}
+          />
         )}
 
         {step === "done" && (
@@ -317,31 +242,12 @@ function BuyModal({ product, onClose }) {
     </div>
   );
 }
-
 function describeError(code, available) {
   switch (code) {
     case "not_enough_stock":
       return `Only ${available} left — lower the quantity and try again.`;
     case "email_required":
       return "This product needs an email address for delivery.";
-    case "not_found_yet":
-      return "That transaction isn't visible on-chain yet — wait a bit and try again.";
-    case "chain_lookup_failed":
-      return "Couldn't reach the blockchain right now — try again in a moment.";
-    case "tx_failed":
-      return "That transaction failed on-chain — it never went through.";
-    case "wrong_recipient":
-      return "That transaction wasn't a USDT (BEP20) transfer to our wallet.";
-    case "amount_too_low":
-      return "The amount received doesn't match the order total.";
-    case "awaiting_confirmations":
-      return "Payment seen, waiting for more confirmations — try again shortly.";
-    case "tx_already_used":
-      return "That transaction hash was already used on another order.";
-    case "insufficient_balance":
-      return "Not enough wallet balance for this order.";
-    case "out_of_stock_refund_pending":
-      return "Sold out at the last moment — your payment will be refunded manually, sorry.";
     default:
       return code ? code.replaceAll("_", " ") : "Something went wrong.";
   }

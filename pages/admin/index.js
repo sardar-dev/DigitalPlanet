@@ -10,6 +10,18 @@ export default function Admin() {
   const [sortAvailableFirst, setSortAvailableFirst] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
+  const [dashboard, setDashboard] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+
+  // Wallet adjustment form
+  const [adjEmail, setAdjEmail] = useState("");
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjReason, setAdjReason] = useState("");
+  const [adjMessage, setAdjMessage] = useState("");
+
+  // DigiTrust reconciliation
+  const [digitrustOrders, setDigitrustOrders] = useState(null);
 
   // Debug tool state
   const [debugTx, setDebugTx] = useState("");
@@ -38,8 +50,58 @@ export default function Admin() {
       setChecking(false);
       loadProducts();
       loadOrders();
+      loadDashboard();
     })();
   }, []);
+
+  async function loadDashboard() {
+    const res = await fetch("/api/admin/dashboard");
+    const data = await res.json();
+    if (data.success) setDashboard(data);
+  }
+
+  async function runManualSync() {
+    setSyncing(true);
+    setSyncMessage("");
+    const res = await fetch("/api/admin/manual-sync", { method: "POST" });
+    const data = await res.json();
+    setSyncing(false);
+    if (data.success) {
+      setSyncMessage(`Synced ${data.synced} products.`);
+      loadProducts();
+      loadDashboard();
+    } else {
+      setSyncMessage(`Failed: ${data.error}`);
+    }
+  }
+
+  async function submitAdjustment() {
+    setAdjMessage("");
+    const res = await fetch("/api/admin/wallet-adjust", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: adjEmail,
+        amount: Number(adjAmount),
+        reason: adjReason,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setAdjMessage(`Done — new balance $${Number(data.balance).toFixed(2)}.`);
+      setAdjEmail("");
+      setAdjAmount("");
+      setAdjReason("");
+    } else {
+      setAdjMessage(`Failed: ${data.error}`);
+    }
+  }
+
+  async function loadDigitrustOrders() {
+    const res = await fetch("/api/admin/digitrust-orders");
+    const data = await res.json();
+    if (data.success) setDigitrustOrders(data.orders);
+  }
 
   async function loadProducts() {
     const res = await fetch("/api/admin/products");
@@ -125,6 +187,12 @@ export default function Admin() {
           <span className="font-display text-2xl">Admin</span>
           <nav className="text-sm space-x-4 sm:space-x-5">
             <button
+              onClick={() => setTab("dashboard")}
+              className={tab === "dashboard" ? "underline" : ""}
+            >
+              Dashboard
+            </button>
+            <button
               onClick={() => setTab("products")}
               className={tab === "products" ? "underline" : ""}
             >
@@ -144,9 +212,98 @@ export default function Admin() {
             </button>
           </nav>
         </div>
+        {dashboard && (
+          <div
+            className={`px-4 sm:px-6 py-2 text-xs font-mono flex flex-wrap gap-4 ${
+              dashboard.digitrust.low ? "bg-signal/10 text-signal" : "bg-white text-wire"
+            }`}
+          >
+            <span>
+              DigiTrust balance:{" "}
+              {dashboard.digitrust.error
+                ? "unavailable"
+                : `$${Number(dashboard.digitrust.balance).toFixed(2)}`}
+              {dashboard.digitrust.low && " — LOW, top up soon"}
+            </span>
+            <span>
+              Last sync:{" "}
+              {dashboard.lastSync ? new Date(dashboard.lastSync).toLocaleString() : "never"}
+            </span>
+          </div>
+        )}
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+        {tab === "dashboard" && (
+          <div className="space-y-10 max-w-2xl">
+            <div>
+              <h2 className="font-display text-lg mb-3">Sync</h2>
+              <button
+                onClick={runManualSync}
+                disabled={syncing}
+                className="px-4 py-2 bg-ink text-paper text-sm disabled:opacity-40"
+              >
+                {syncing ? "Syncing…" : "Sync products now"}
+              </button>
+              {syncMessage && <p className="text-sm text-wire mt-2">{syncMessage}</p>}
+            </div>
+
+            {dashboard && (
+              <div>
+                <h2 className="font-display text-lg mb-3">Sales</h2>
+                <dl className="text-sm grid grid-cols-2 gap-y-2 max-w-xs">
+                  <dt className="text-wire">Orders delivered</dt>
+                  <dd className="font-mono">{dashboard.sales.ordersDelivered}</dd>
+                  <dt className="text-wire">Total sales</dt>
+                  <dd className="font-mono">${dashboard.sales.totalSales.toFixed(2)}</dd>
+                  <dt className="text-wire">Est. DigiTrust cost</dt>
+                  <dd className="font-mono">${dashboard.sales.totalCost.toFixed(2)}</dd>
+                  <dt className="text-wire">Est. profit</dt>
+                  <dd className="font-mono">${dashboard.sales.profit.toFixed(2)}</dd>
+                </dl>
+                <p className="text-xs text-wire mt-2">
+                  Cost is estimated from each product's current DigiTrust price, not
+                  the historical price at time of sale.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <h2 className="font-display text-lg mb-3">Manual wallet credit / debit</h2>
+              <div className="space-y-3 max-w-sm text-sm">
+                <input
+                  value={adjEmail}
+                  onChange={(e) => setAdjEmail(e.target.value)}
+                  placeholder="Customer email"
+                  className="w-full border border-line px-3 py-2 bg-paper"
+                />
+                <input
+                  value={adjAmount}
+                  onChange={(e) => setAdjAmount(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  placeholder="Amount (negative to debit)"
+                  className="w-full border border-line px-3 py-2 bg-paper font-mono"
+                />
+                <input
+                  value={adjReason}
+                  onChange={(e) => setAdjReason(e.target.value)}
+                  placeholder="Reason (required)"
+                  className="w-full border border-line px-3 py-2 bg-paper"
+                />
+                <button
+                  onClick={submitAdjustment}
+                  disabled={!adjEmail || !adjAmount || !adjReason}
+                  className="px-4 py-2 bg-ink text-paper text-sm disabled:opacity-40"
+                >
+                  Apply
+                </button>
+                {adjMessage && <p className="text-wire">{adjMessage}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "products" && (
           <>
             <div className="flex flex-wrap gap-3 justify-between mb-3">
@@ -225,6 +382,22 @@ export default function Admin() {
               placeholder="Search by product, status, or tx hash…"
               className="border border-line px-3 py-1.5 bg-paper text-sm w-full mb-3"
             />
+            {digitrustOrders && (
+              <div className="mb-4 border border-line bg-white p-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-display">DigiTrust's recent orders</span>
+                  <button
+                    onClick={() => setDigitrustOrders(null)}
+                    className="text-xs underline text-wire"
+                  >
+                    Close
+                  </button>
+                </div>
+                <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+                  {JSON.stringify(digitrustOrders, null, 2)}
+                </pre>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-t border-line min-w-[720px]">
                 <thead>
@@ -263,6 +436,43 @@ export default function Admin() {
                           >
                             Mark refunded
                           </button>
+                        )}
+                        {o.status === "needs_reconciliation" && (
+                          <>
+                            <button
+                              onClick={loadDigitrustOrders}
+                              className="underline"
+                            >
+                              Check DigiTrust
+                            </button>
+                            <button
+                              onClick={() => {
+                                const items = prompt(
+                                  "Paste delivered items, one per line (from DigiTrust's order history):"
+                                );
+                                if (items) {
+                                  fetch("/api/admin/orders", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      id: o.id,
+                                      status: "delivered",
+                                      items,
+                                    }),
+                                  }).then(loadOrders);
+                                }
+                              }}
+                              className="underline"
+                            >
+                              Mark delivered
+                            </button>
+                            <button
+                              onClick={() => setOrderStatus(o.id, "failed")}
+                              className="underline text-signal"
+                            >
+                              Mark failed
+                            </button>
+                          </>
                         )}
                         {["pending_payment", "payment_submitted", "failed", "cancelled"].includes(
                           o.status

@@ -21,50 +21,51 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: "order_id_required" });
   }
 
-  const { data: order, error: orderErr } = await supabaseAdmin
+  // Atomically claim the order: only succeeds if it's still
+  // pending_payment, so a double-click / parallel request can't pay
+  // for (and deduct balance for) the same order twice.
+  const { data: claimedOrder, error: claimErr } = await supabaseAdmin
     .from("orders")
-    .select("*")
+    .update({ status: "paid", paid_with: "wallet_balance", updated_at: new Date().toISOString() })
     .eq("id", order_id)
     .eq("user_id", session.user.id)
+    .eq("status", "pending_payment")
+    .select()
     .single();
 
-  if (orderErr || !order) {
-    return res.status(404).json({ success: false, error: "order_not_found" });
-  }
-  if (order.status !== "pending_payment") {
-    return res.status(409).json({ success: false, error: `order_already_${order.status}` });
+  if (claimErr || !claimedOrder) {
+    return res.status(409).json({ success: false, error: "order_not_available" });
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("balance")
-    .eq("id", session.user.id)
-    .single();
+  // Atomic, single-statement balance deduction — `decrement_balance_
+  // if_enough` does `balance = balance - x WHERE balance >= x` as one
+  // Postgres UPDATE, so two simultaneous purchases can never both
+  // succeed against a balance that only covers one of them.
+  const { data: newBalance, error: balErr } = await supabaseAdmin.rpc(
+    "decrement_balance_if_enough",
+    { p_user_id: session.user.id, p_amount: claimedOrder.total }
+  );
 
-  const balance = Number(profile?.balance || 0);
-  if (balance < order.total) {
-    return res.status(402).json({ success: false, error: "insufficient_balance", balance });
+  if (balErr) {
+    // Something went wrong before any money moved — safe to put the
+    // order back for a retry.
+    await supabaseAdmin
+      .from("orders")
+      .update({ status: "pending_payment", updated_at: new Date().toISOString() })
+      .eq("id", order_id);
+    return res.status(500).json({ success: false, error: balErr.message });
   }
 
-  // Deduct first. If fulfillment fails, the shared fulfillOrder()
-  // already marks the order "failed" for manual refund — a deducted
-  // balance on a failed order is the wallet equivalent of that same
-  // manual-refund process described in the README.
-  await supabaseAdmin
-    .from("profiles")
-    .update({ balance: balance - order.total })
-    .eq("id", session.user.id);
+  if (newBalance === null) {
+    // The WHERE balance >= amount clause matched no row — insufficient funds.
+    await supabaseAdmin
+      .from("orders")
+      .update({ status: "pending_payment", updated_at: new Date().toISOString() })
+      .eq("id", order_id);
+    return res.status(402).json({ success: false, error: "insufficient_balance" });
+  }
 
-  await supabaseAdmin
-    .from("orders")
-    .update({
-      status: "paid",
-      paid_with: "wallet_balance",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", order.id);
-
-  const result = await fulfillOrder(order);
+  const result = await fulfillOrder(claimedOrder);
   if (!result.success) {
     return res.status(502).json({ success: false, error: result.error });
   }

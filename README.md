@@ -127,6 +127,93 @@ npm run dev
 
 ## If you already ran schema.sql before this update
 
-Run `supabase/migration_002_wallet.sql` in the SQL Editor — it adds
-the wallet balance column and top-ups table without touching your
-existing data.
+Run these in order in the SQL Editor (each is safe to run once, skips
+anything already applied):
+1. `supabase/migration_002_wallet.sql`
+2. `supabase/migration_003_security_fixes.sql` — **run this one**,
+   it closes a real security hole (see below).
+3. `supabase/migration_004_app_meta.sql`
+
+## Security fixes (read this if you're upgrading)
+
+A review turned up several real issues, now fixed:
+
+- **Fake orders via direct Supabase inserts**: the original schema
+  had a client-side "insert your own order" RLS policy. A logged-in
+  user could use the Supabase JS client directly (bypassing our
+  `/api/orders/create` endpoint entirely) to insert an order with
+  `total = 0`, then call `/api/orders/pay-with-balance` to get a real
+  product for free. **Fix**: that policy is removed entirely —
+  `migration_003` drops it. All order creation now goes only through
+  our server route, which computes the total itself.
+- **Tx hash reuse / case-sensitivity**: a transaction hash could
+  previously be reused across an order and a wallet top-up, or
+  claimed twice by simultaneous requests, and `0xABC...` vs
+  `0xabc...` weren't recognized as the same hash. **Fix**: every hash
+  is lowercased and claimed via a single atomic `INSERT` into a
+  `used_tx_hashes` table (primary key = the hash) — only one
+  concurrent request can ever win that insert, for any hash, anywhere
+  in the app.
+- **Double-click / concurrent double-fulfillment**: clicking "verify
+  payment" twice quickly (or two parallel requests) could both pass
+  the pending_payment check and both call DigiTrust's `/purchase`.
+  **Fix**: claiming an order for processing is a single conditional
+  `UPDATE ... WHERE status = 'pending_payment'` — a second concurrent
+  request gets 0 rows back and bails out immediately.
+- **Wallet balance race condition**: balance updates used to be
+  read-then-write in JavaScript, which two simultaneous top-ups or
+  purchases could race. **Fix**: balance changes now happen via
+  `increment_balance` / `decrement_balance_if_enough` — single
+  Postgres `UPDATE balance = balance ± x` statements, which Postgres
+  itself serializes per row.
+- **DigiTrust timeout ambiguity**: if the purchase call to DigiTrust
+  times out, we don't actually know whether they processed it or not
+  — blindly marking it "failed" (implying safe to refund) risked
+  delivering the product AND refunding it. **Fix**: a genuine
+  network/timeout error now marks the order `needs_reconciliation`
+  instead of `failed`. Resolve these in `/admin` → Orders tab: "Check
+  DigiTrust" shows DigiTrust's own recent order history so you can
+  see whether it actually went through, then either "Mark delivered"
+  (paste the real items) or "Mark failed" (safe to refund).
+
+## Other additions
+
+- **Resumable checkout**: if a customer closes the payment modal,
+  refreshes, or loses connection mid-payment, `/account/orders` has a
+  "Continue payment" button on any still-pending order — same payment
+  panel (wallet balance, USDT deposit, copy address, QR code, tx hash
+  verify), not just a dead end with only "Cancel".
+- **Payment method choice**: checkout now explicitly asks "pay with
+  wallet balance" vs "deposit USDT (BEP20)" instead of showing both
+  mixed together.
+- **Copy address + QR code**: the payout wallet address has a "Copy"
+  button with a "Copied!" confirmation, and a scannable QR code.
+- **Password reset / resend confirmation**: added to `/login` —
+  "Forgot password" and "Resend confirmation email".
+- **Signup message fixed**: only shows "check your email" if Supabase
+  actually required confirmation (checks whether a session came back
+  immediately) — no longer shows that message when email confirmation
+  is disabled on your project.
+- **Products failing to load** now shows "Couldn't load products —
+  try again" instead of silently looking like an empty store.
+- **Wallet ledger**: `/account/wallet` shows a full history — top-ups,
+  admin adjustments, and what was spent on which order.
+- **Admin dashboard**: DigiTrust balance always shown at the top (with
+  a low-balance warning), last sync time, a "Sync products now"
+  button (no more needing to hit the URL by hand — see below), an
+  approximate sales/profit summary, and a manual wallet credit/debit
+  tool with a required reason.
+- **Auto-hide on price increase**: if DigiTrust raises a product's
+  price since the last sync, it's automatically un-ticked (hidden
+  from the storefront) so you don't sell at the old margin by
+  accident. A price drop never auto-shows anything — that's still
+  your call. Check `/admin` after a sync if you rely on a product
+  that might have gone up in price.
+- **About manually hitting the sync URL**: yes, it's safe to open
+  `/api/admin/sync?secret=...` as often as you like (every hour, every
+  few minutes, whatever) — it's just a read + upsert, no side effects
+  beyond refreshing the cache. For automatic syncing without doing
+  that by hand, either use the new "Sync products now" button in
+  `/admin` → Dashboard whenever you think of it, or point a free
+  external scheduler (cron-job.org) at that same URL — see the Vercel
+  Hobby cron note above.

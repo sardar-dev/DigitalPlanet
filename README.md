@@ -130,9 +130,11 @@ npm run dev
 Run these in order in the SQL Editor (each is safe to run once, skips
 anything already applied):
 1. `supabase/migration_002_wallet.sql`
-2. `supabase/migration_003_security_fixes.sql` — **run this one**,
-   it closes a real security hole (see below).
+2. `supabase/migration_003_security_fixes.sql`
 3. `supabase/migration_004_app_meta.sql`
+4. `supabase/migration_005_lock_down_functions.sql` — **run this one
+   even if you already ran 003**, it closes a second real hole (see
+   below) that 003 introduced.
 
 ## Security fixes (read this if you're upgrading)
 
@@ -166,6 +168,17 @@ A review turned up several real issues, now fixed:
   `increment_balance` / `decrement_balance_if_enough` — single
   Postgres `UPDATE balance = balance ± x` statements, which Postgres
   itself serializes per row.
+- **RPC functions callable directly by any logged-in user**:
+  `increment_balance`/`decrement_balance_if_enough` are `SECURITY
+  DEFINER` (they bypass RLS on purpose, to do the atomic update).
+  Postgres defaults `EXECUTE` on new functions to `PUBLIC`, which
+  includes Supabase's `anon`/`authenticated` roles — so without an
+  explicit revoke, any logged-in user could call
+  `supabase.rpc('increment_balance', {...})` straight from the
+  browser and credit their own balance with any amount, with zero
+  verification. **Fix**: `migration_005` revokes `EXECUTE` from
+  `public`/`anon`/`authenticated` and grants it only to
+  `service_role` (which is all our server code ever uses).
 - **DigiTrust timeout ambiguity**: if the purchase call to DigiTrust
   times out, we don't actually know whether they processed it or not
   — blindly marking it "failed" (implying safe to refund) risked

@@ -57,7 +57,7 @@ export default function PaymentPanel({ order, onDone }) {
     const data = await res.json();
     setBusy(false);
     if (data.success) {
-      onDone(data.items);
+      onDone({ items: data.items, manual: data.manual });
     } else {
       setError(describeError(data.error));
     }
@@ -74,7 +74,7 @@ export default function PaymentPanel({ order, onDone }) {
     const data = await res.json();
     setBusy(false);
     if (data.success) {
-      onDone(data.items);
+      onDone({ items: data.items, manual: data.manual });
     } else {
       setError(describeError(data.error));
     }

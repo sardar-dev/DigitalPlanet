@@ -226,7 +226,131 @@ A review turned up several real issues, now fixed:
   `/api/admin/sync?secret=...` as often as you like (every hour, every
   few minutes, whatever) — it's just a read + upsert, no side effects
   beyond refreshing the cache. For automatic syncing without doing
-  that by hand, either use the new "Sync products now" button in
-  `/admin` → Dashboard whenever you think of it, or point a free
-  external scheduler (cron-job.org) at that same URL — see the Vercel
-  Hobby cron note above.
+  that by hand, either use the "Sync products now" button in `/admin`
+  → Dashboard whenever you think of it, or point a free external
+  scheduler (cron-job.org) at that same URL — see the Vercel Hobby
+  cron note above.
+
+## Manual products (Phase 1)
+
+Products that aren't fulfilled by DigiTrust at all — the admin sets
+title, price, and stock by hand, and delivers each order by hand too.
+No new hosting, background workers, or queues; everything reuses the
+existing free Vercel + Supabase setup.
+
+**No new environment variables.**
+
+### What changed
+- `products.provider` (new column: `'digitrust'` | `'manual'`).
+  Everything else on a manual product reuses existing columns
+  (`description`, `cost_price`, `sell_price`, `available_stock`/
+  `real_stock`, `requires_email`, `delivery` — used as the estimated
+  delivery time text, `selected` — used as active/inactive).
+- Manual product IDs are always **negative** (from a Postgres
+  sequence), so they can never collide with a DigiTrust product id.
+- `lib/fulfillOrder.js` now checks `provider` first: DigiTrust
+  products behave exactly as before; manual products skip DigiTrust
+  entirely and go to `awaiting_manual_fulfillment` after an atomic
+  stock decrement.
+- `pages/api/orders/create.js` skips the DigiTrust live-stock call for
+  manual products (reads our own `available_stock` instead).
+- `pages/api/admin/manual-products.js` — admin-only CRUD. "Delete"
+  always archives (`selected = false`); a manual product row is never
+  hard-deleted, since existing orders reference its id.
+- `pages/api/admin/manual-deliver.js` — admin pastes the
+  code/account/instructions, one atomic conditional `UPDATE ... WHERE
+  status = 'awaiting_manual_fulfillment'` marks it delivered. A
+  double-click gets `order_not_awaiting_delivery` on the second
+  attempt instead of delivering twice.
+- `/admin` → new **"Manual Products"** tab (create/edit/archive), and
+  a **"Deliver"** button on `awaiting_manual_fulfillment` orders in
+  the Orders tab. The Orders nav button shows a pending-manual-
+  delivery count — computed from orders already loaded in the page,
+  no extra query.
+- Storefront shows a "Manual delivery — <estimated time>" badge;
+  checkout shows a notice before payment; `/account/orders` labels
+  the status "Awaiting manual delivery" and shows the estimated time.
+  "Continue payment" (resume flow) works identically for manual and
+  DigiTrust orders — it doesn't know or care which kind it is.
+
+### Stock design (why this approach)
+Stock is **not reserved** when an order is created (no expiry job
+needed) — it's **atomically decremented only once payment is
+confirmed**, via a single `UPDATE ... WHERE available_stock >=
+quantity` Postgres statement (`decrement_manual_stock`). This means:
+- Never goes negative (the `WHERE` clause blocks it).
+- Two customers can't both win the last unit (only one `UPDATE` can
+  match at a time).
+- An abandoned/never-paid order never locks stock (nothing was
+  reserved for it).
+- No cron/background job needed for either stock or "expiring" a
+  stale pending order — a pending order that's never paid simply never
+  decrements anything; there's nothing to clean up.
+
+### Migration
+Run **`supabase/migration_006_manual_products.sql`** in the SQL
+Editor (same place as the other migrations). It's safe to run once;
+adds the `provider` column, the id sequence, and two `SECURITY
+DEFINER` functions with `EXECUTE` revoked from
+`public`/`anon`/`authenticated` and granted only to `service_role` —
+same lock-down pattern as `migration_005`.
+
+### Changed / new files
+```
+supabase/migration_006_manual_products.sql   (new)
+supabase/schema.sql                          (updated, fresh installs)
+lib/fulfillOrder.js                          (provider branch)
+pages/api/orders/create.js                   (skip DigiTrust for manual)
+pages/api/orders/verify-payment.js           (pass through `manual` flag)
+pages/api/orders/pay-with-balance.js         (pass through `manual` flag)
+pages/api/products.js                        (expose `provider`)
+pages/api/admin/manual-products.js           (new — CRUD)
+pages/api/admin/manual-deliver.js            (new — atomic delivery)
+components/PaymentPanel.js                   (onDone payload shape)
+pages/index.js                               (badge, notice, done-state)
+pages/account/orders.js                      (status label, delivery time)
+pages/admin/index.js                         (Manual Products tab, Deliver button, pending count)
+```
+
+### Test checklist — manual products
+- [ ] Run `migration_006_manual_products.sql`, redeploy.
+- [ ] `/admin` → Manual Products → create a product (title, price,
+      cost, stock, delivery time) → appears in the list.
+- [ ] Storefront shows it with the "Manual delivery — <time>" badge.
+- [ ] Checkout shows the manual-delivery notice before payment.
+- [ ] Pay with wallet balance → order becomes
+      `awaiting_manual_fulfillment` (check `/account/orders` and
+      `/admin` Orders tab) — DigiTrust is never called (check DigiTrust's
+      own order history to confirm nothing new appears there).
+- [ ] Pay with USDT (BEP20) → same result.
+- [ ] `/admin` → Orders → "Deliver" on the pending order, paste
+      items → order becomes `delivered`, items visible in
+      `/account/orders`.
+- [ ] Click "Deliver" twice quickly (or resubmit the same request) →
+      second attempt gets `order_not_awaiting_delivery`, item is not
+      double-delivered.
+- [ ] Set stock to 1, open two browser sessions, both try to buy the
+      last unit at the same time → only one succeeds; the other gets
+      `out_of_stock_refund_pending` at fulfillment (payment stays
+      collected, pending your manual refund — same as the existing
+      DigiTrust out-of-stock case).
+- [ ] Archive a manual product with existing orders → row isn't
+      deleted, storefront hides it, `/account/orders` still shows the
+      old order and its delivered items correctly.
+- [ ] Run a DigiTrust sync (`/admin` → Dashboard → "Sync products
+      now") → manual products are untouched (stock, price, active
+      status all unchanged).
+
+### Regression checklist — existing DigiTrust flow (make sure nothing broke)
+- [ ] DigiTrust products still show/hide/price the same as before.
+- [ ] DigiTrust checkout (wallet balance and USDT) still fulfills via
+      DigiTrust's `/purchase` and delivers items instantly.
+- [ ] Tx-hash claiming still rejects a reused hash (case-insensitively,
+      across orders and top-ups).
+- [ ] Double-clicking "verify payment" on a DigiTrust order still only
+      fulfills once.
+- [ ] Wallet top-up and balance-based checkout still work, balance
+      still can't go negative under concurrent requests.
+- [ ] `/admin` Dashboard still shows DigiTrust balance, last sync
+      time, sales/profit.
+- [ ] Price-increase auto-hide still only affects DigiTrust products.

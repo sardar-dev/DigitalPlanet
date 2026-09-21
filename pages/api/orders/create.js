@@ -40,22 +40,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: "email_required" });
   }
 
-  // Live recheck against DigiTrust, with the buffer applied, so a
-  // sudden stock drop between page-load and checkout is caught here
-  // rather than after the customer has already paid.
-  let live;
-  try {
-    const { product } = await getProduct(product_id);
-    live = applyStockBuffer(product);
-  } catch (e) {
-    return res.status(502).json({ success: false, error: "stock_check_failed" });
+  // Live recheck: for DigiTrust products, re-check against DigiTrust
+  // itself (buffer applied). For manual products, DigiTrust is never
+  // called — we just re-read our own stock, which is the source of
+  // truth (the real atomic decrement happens later, at payment
+  // confirmation, via decrement_manual_stock).
+  let availableNow;
+  if (localProduct.provider === "manual") {
+    availableNow = localProduct.available_stock;
+  } else {
+    try {
+      const { product } = await getProduct(product_id);
+      availableNow = applyStockBuffer(product).available_stock;
+    } catch (e) {
+      return res.status(502).json({ success: false, error: "stock_check_failed" });
+    }
   }
 
-  if (live.available_stock < quantity) {
+  if (availableNow < quantity) {
     return res.status(409).json({
       success: false,
       error: "not_enough_stock",
-      available: live.available_stock,
+      available: availableNow,
     });
   }
 

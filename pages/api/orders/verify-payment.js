@@ -101,5 +101,5 @@ export default async function handler(req, res) {
   if (!result.success) {
     return res.status(502).json({ success: false, error: result.error });
   }
-  return res.status(200).json({ success: true, items: result.items });
+  return res.status(200).json({ success: true, items: result.items, manual: result.manual || false });
 }

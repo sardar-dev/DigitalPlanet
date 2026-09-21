@@ -23,6 +23,96 @@ export default function Admin() {
   // DigiTrust reconciliation
   const [digitrustOrders, setDigitrustOrders] = useState(null);
 
+  // Manual products
+  const [manualProducts, setManualProducts] = useState([]);
+  const [manualForm, setManualForm] = useState(emptyManualForm());
+  const [manualMessage, setManualMessage] = useState("");
+
+  function emptyManualForm() {
+    return {
+      id: null,
+      title: "",
+      description: "",
+      sell_price: "",
+      cost_price: "",
+      available_stock: "",
+      requires_email: false,
+      delivery: "Within 1-6 hours",
+      selected: true,
+    };
+  }
+
+  async function loadManualProducts() {
+    const res = await fetch("/api/admin/manual-products");
+    const data = await res.json();
+    if (data.success) setManualProducts(data.products);
+  }
+
+  async function saveManualProduct() {
+    setManualMessage("");
+    const body = {
+      ...(manualForm.id !== null ? { id: manualForm.id } : {}),
+      title: manualForm.title,
+      description: manualForm.description,
+      sell_price: Number(manualForm.sell_price),
+      cost_price: Number(manualForm.cost_price || 0),
+      available_stock: Number(manualForm.available_stock),
+      requires_email: manualForm.requires_email,
+      delivery: manualForm.delivery,
+      selected: manualForm.selected,
+    };
+    const res = await fetch("/api/admin/manual-products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setManualMessage(manualForm.id !== null ? "Updated." : "Created.");
+      setManualForm(emptyManualForm());
+      loadManualProducts();
+    } else {
+      setManualMessage(`Failed: ${data.error}`);
+    }
+  }
+
+  function editManualProduct(p) {
+    setManualForm({
+      id: p.id,
+      title: p.title,
+      description: p.description || "",
+      sell_price: p.sell_price,
+      cost_price: p.cost_price,
+      available_stock: p.available_stock,
+      requires_email: p.requires_email,
+      delivery: p.delivery || "",
+      selected: p.selected,
+    });
+  }
+
+  async function archiveManualProduct(id) {
+    if (!confirm("Archive this product? It will stop showing on the storefront (existing orders are kept).")) return;
+    await fetch("/api/admin/manual-products", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    loadManualProducts();
+  }
+
+  async function deliverManualOrder(orderId) {
+    const items = prompt("Paste the delivered item(s)/instructions, one per line:");
+    if (!items) return;
+    const res = await fetch("/api/admin/manual-deliver", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order_id: orderId, items }),
+    });
+    const data = await res.json();
+    if (!data.success) alert(`Failed: ${data.error}`);
+    loadOrders();
+  }
+
   // Debug tool state
   const [debugTx, setDebugTx] = useState("");
   const [debugResult, setDebugResult] = useState(null);
@@ -51,6 +141,7 @@ export default function Admin() {
       loadProducts();
       loadOrders();
       loadDashboard();
+      loadManualProducts();
     })();
   }, []);
 
@@ -176,6 +267,11 @@ export default function Admin() {
     );
   }, [orders, orderSearch]);
 
+  const pendingManualCount = useMemo(
+    () => orders.filter((o) => o.status === "awaiting_manual_fulfillment").length,
+    [orders]
+  );
+
   if (checking) return <p className="p-8 text-sm">Checking access…</p>;
   if (!allowed)
     return <p className="p-8 text-sm">This account doesn't have admin access.</p>;
@@ -199,10 +295,19 @@ export default function Admin() {
               Products
             </button>
             <button
+              onClick={() => setTab("manual")}
+              className={tab === "manual" ? "underline" : ""}
+            >
+              Manual Products
+            </button>
+            <button
               onClick={() => setTab("orders")}
               className={tab === "orders" ? "underline" : ""}
             >
               Orders
+              {pendingManualCount > 0 && (
+                <span className="ml-1 text-signal">({pendingManualCount})</span>
+              )}
             </button>
             <button
               onClick={() => setTab("debug")}
@@ -374,6 +479,152 @@ export default function Admin() {
           </>
         )}
 
+        {tab === "manual" && (
+          <div className="space-y-8 max-w-2xl">
+            <div>
+              <h2 className="font-display text-lg mb-3">
+                {manualForm.id !== null ? "Edit product" : "Add a manual product"}
+              </h2>
+              <div className="space-y-3 text-sm">
+                <input
+                  value={manualForm.title}
+                  onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
+                  placeholder="Title"
+                  className="w-full border border-line px-3 py-2 bg-paper"
+                />
+                <textarea
+                  value={manualForm.description}
+                  onChange={(e) =>
+                    setManualForm({ ...manualForm, description: e.target.value })
+                  }
+                  placeholder="Description (optional)"
+                  className="w-full border border-line px-3 py-2 bg-paper"
+                  rows={2}
+                />
+                <div className="flex gap-3">
+                  <input
+                    value={manualForm.sell_price}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, sell_price: e.target.value })
+                    }
+                    type="number"
+                    step="0.01"
+                    placeholder="Sell price"
+                    className="flex-1 border border-line px-3 py-2 bg-paper font-mono"
+                  />
+                  <input
+                    value={manualForm.cost_price}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, cost_price: e.target.value })
+                    }
+                    type="number"
+                    step="0.01"
+                    placeholder="Your cost (admin-only)"
+                    className="flex-1 border border-line px-3 py-2 bg-paper font-mono"
+                  />
+                  <input
+                    value={manualForm.available_stock}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, available_stock: e.target.value })
+                    }
+                    type="number"
+                    step="1"
+                    placeholder="Stock"
+                    className="w-28 border border-line px-3 py-2 bg-paper font-mono"
+                  />
+                </div>
+                <input
+                  value={manualForm.delivery}
+                  onChange={(e) => setManualForm({ ...manualForm, delivery: e.target.value })}
+                  placeholder='Estimated delivery, e.g. "Within 1-6 hours"'
+                  className="w-full border border-line px-3 py-2 bg-paper"
+                />
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={manualForm.requires_email}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, requires_email: e.target.checked })
+                    }
+                  />
+                  Requires customer email at checkout
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={manualForm.selected}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, selected: e.target.checked })
+                    }
+                  />
+                  Active (shown on storefront)
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={saveManualProduct}
+                    className="px-4 py-2 bg-ink text-paper text-sm"
+                  >
+                    {manualForm.id !== null ? "Save changes" : "Create product"}
+                  </button>
+                  {manualForm.id !== null && (
+                    <button
+                      onClick={() => setManualForm(emptyManualForm())}
+                      className="px-4 py-2 border border-line text-sm"
+                    >
+                      Cancel edit
+                    </button>
+                  )}
+                </div>
+                {manualMessage && <p className="text-wire">{manualMessage}</p>}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="font-display text-lg mb-3">Your manual products</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-t border-line min-w-[640px]">
+                  <thead>
+                    <tr className="text-left text-wire border-b border-line">
+                      <th className="py-2 pr-2">Title</th>
+                      <th className="py-2 pr-2">Stock</th>
+                      <th className="py-2 pr-2">Sell price</th>
+                      <th className="py-2 pr-2">Cost</th>
+                      <th className="py-2 pr-2">Active</th>
+                      <th className="py-2 pr-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualProducts.map((p) => (
+                      <tr key={p.id} className="border-b border-line">
+                        <td className="py-2 pr-2">{p.title}</td>
+                        <td className="py-2 pr-2 font-mono">{p.available_stock}</td>
+                        <td className="py-2 pr-2 font-mono">${Number(p.sell_price).toFixed(2)}</td>
+                        <td className="py-2 pr-2 font-mono text-wire">
+                          ${Number(p.cost_price).toFixed(2)}
+                        </td>
+                        <td className="py-2 pr-2">{p.selected ? "Yes" : "No"}</td>
+                        <td className="py-2 pr-2 space-x-2 whitespace-nowrap">
+                          <button onClick={() => editManualProduct(p)} className="underline">
+                            Edit
+                          </button>
+                          {p.selected && (
+                            <button
+                              onClick={() => archiveManualProduct(p.id)}
+                              className="underline text-signal"
+                            >
+                              Archive
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "orders" && (
           <>
             <input
@@ -427,6 +678,14 @@ export default function Admin() {
                             className="underline"
                           >
                             Cancel
+                          </button>
+                        )}
+                        {o.status === "awaiting_manual_fulfillment" && (
+                          <button
+                            onClick={() => deliverManualOrder(o.id)}
+                            className="underline"
+                          >
+                            Deliver
                           </button>
                         )}
                         {o.status === "failed" && (

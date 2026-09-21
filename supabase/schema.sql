@@ -40,16 +40,20 @@ create policy "profiles: user can read own row"
 -- ─────────────────────────────────────────────────────────────
 create table if not exists public.products (
   id bigint primary key,              -- same id as DigiTrust product id
+                                       -- (manual products use negative ids)
   title text not null,
   description text,
-  cost_price numeric not null,        -- price DigiTrust charges us
+  cost_price numeric not null,        -- price DigiTrust charges us (or admin's own cost for manual products)
   sell_price numeric not null,        -- price we charge the customer
-  real_stock integer not null default 0,      -- raw DigiTrust stock
-  available_stock integer not null default 0, -- after buffer applied
+  real_stock integer not null default 0,      -- raw DigiTrust stock (or admin-set stock for manual)
+  available_stock integer not null default 0, -- after buffer applied (or same as real_stock for manual)
   requires_email boolean not null default false,
-  delivery text default 'instant',
-  selected boolean not null default false,    -- shown on storefront?
-  updated_at timestamptz not null default now()
+  delivery text default 'instant',    -- DigiTrust: usually 'instant'. Manual: e.g. "Within 1-6 hours"
+  selected boolean not null default false,    -- shown on storefront? (also doubles as active/inactive for manual)
+  provider text not null default 'digitrust', -- 'digitrust' | 'manual'
+  updated_at timestamptz not null default now(),
+
+  constraint products_provider_check check (provider in ('digitrust', 'manual'))
 );
 
 alter table public.products enable row level security;
@@ -226,6 +230,50 @@ grant execute on function public.increment_balance(uuid, numeric)
   to service_role;
 grant execute on function public.decrement_balance_if_enough(uuid, numeric)
   to service_role;
+
+-- ─────────────────────────────────────────────────────────────
+-- Manual products: negative-id generator + atomic stock decrement.
+-- Same lock-down pattern as the wallet functions above.
+-- ─────────────────────────────────────────────────────────────
+create sequence if not exists public.manual_product_id_seq start with 1 increment by 1;
+
+create or replace function public.next_manual_product_id()
+returns bigint
+language sql
+security definer
+as $$
+  select -nextval('public.manual_product_id_seq');
+$$;
+
+revoke all on function public.next_manual_product_id() from public, anon, authenticated;
+grant execute on function public.next_manual_product_id() to service_role;
+
+create or replace function public.decrement_manual_stock(p_product_id bigint, p_quantity integer)
+returns integer
+language plpgsql
+security definer
+as $$
+declare v_new_stock integer;
+begin
+  if p_quantity is null or p_quantity <= 0 then
+    raise exception 'quantity must be a positive integer';
+  end if;
+
+  update public.products
+  set available_stock = available_stock - p_quantity,
+      real_stock = available_stock - p_quantity,
+      updated_at = now()
+  where id = p_product_id
+    and provider = 'manual'
+    and available_stock >= p_quantity
+  returning available_stock into v_new_stock;
+
+  return v_new_stock;
+end;
+$$;
+
+revoke all on function public.decrement_manual_stock(bigint, integer) from public, anon, authenticated;
+grant execute on function public.decrement_manual_stock(bigint, integer) to service_role;
 
 -- ─────────────────────────────────────────────────────────────
 -- app_meta: small key/value table, currently just used to show

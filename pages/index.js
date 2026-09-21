@@ -122,6 +122,13 @@ export default function Storefront() {
                 {p.description && (
                   <div className="text-sm text-wire mt-1">{p.description}</div>
                 )}
+                {p.provider === "manual" && (
+                  <div className="text-xs mt-1">
+                    <span className="inline-block border border-line px-2 py-0.5">
+                      Manual delivery — {p.delivery || "see details"}
+                    </span>
+                  </div>
+                )}
                 <div className="text-xs font-mono text-wire mt-1">
                   {p.available_stock} available
                 </div>
@@ -156,6 +163,7 @@ function BuyModal({ product, onClose }) {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [items, setItems] = useState(null);
+  const [manual, setManual] = useState(false);
 
   async function createOrder() {
     setError("");
@@ -185,6 +193,13 @@ function BuyModal({ product, onClose }) {
 
         {step === "form" && (
           <div className="space-y-4">
+            {product.provider === "manual" && (
+              <p className="text-xs border border-line p-3 bg-white">
+                This product is delivered manually. Estimated delivery:{" "}
+                <strong>{product.delivery || "see details"}</strong>. You'll find it in{" "}
+                <strong>My Orders</strong> once it's ready.
+              </p>
+            )}
             <label className="block text-sm">
               Quantity
               <input
@@ -220,14 +235,31 @@ function BuyModal({ product, onClose }) {
         {step === "order" && order && (
           <PaymentPanel
             order={order}
-            onDone={(deliveredItems) => {
-              setItems(deliveredItems);
+            onDone={(result) => {
+              setItems(result.items);
+              setManual(result.manual);
               setStep("done");
             }}
           />
         )}
 
-        {step === "done" && (
+        {step === "done" && manual && (
+          <div className="space-y-3 text-sm">
+            <p>
+              Payment confirmed. This product is delivered manually — estimated delivery{" "}
+              <strong>{product.delivery || "soon"}</strong>. Check{" "}
+              <Link href="/account/orders" className="underline">
+                My Orders
+              </Link>{" "}
+              once it's ready.
+            </p>
+            <button onClick={onClose} className="w-full py-2 bg-ink text-paper">
+              Done
+            </button>
+          </div>
+        )}
+
+        {step === "done" && !manual && (
           <div className="space-y-3 text-sm">
             <p>Delivered. Save these now:</p>
             <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">

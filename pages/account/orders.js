@@ -8,6 +8,7 @@ const STATUS_LABEL = {
   payment_submitted: "Verifying payment",
   paid: "Paid — fulfilling",
   fulfilling: "Fulfilling",
+  awaiting_manual_fulfillment: "Awaiting manual delivery",
   delivered: "Delivered",
   failed: "Failed — refund pending",
   refunded: "Refunded",
@@ -33,7 +34,7 @@ export default function Orders() {
     }
     const { data } = await supabase
       .from("orders")
-      .select("*, products(title)")
+      .select("*, products(title, provider, delivery)")
       .order("created_at", { ascending: false });
     setOrders(data || []);
   }
@@ -81,6 +82,11 @@ export default function Orders() {
                 {STATUS_LABEL[o.status] || o.status} ·{" "}
                 {new Date(o.created_at).toLocaleString()}
               </div>
+              {o.status === "awaiting_manual_fulfillment" && o.products?.delivery && (
+                <div className="text-xs text-wire mt-1">
+                  Estimated delivery: {o.products.delivery}
+                </div>
+              )}
 
               {o.status === "pending_payment" && resuming !== o.id && (
                 <div className="flex gap-3 mt-2">

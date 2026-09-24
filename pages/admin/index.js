@@ -28,6 +28,27 @@ export default function Admin() {
   const [manualForm, setManualForm] = useState(emptyManualForm());
   const [manualMessage, setManualMessage] = useState("");
 
+  // Site settings
+  const [whatsappLink, setWhatsappLink] = useState("");
+  const [settingsMessage, setSettingsMessage] = useState("");
+
+  async function loadSettings() {
+    const res = await fetch("/api/admin/settings");
+    const data = await res.json();
+    if (data.success) setWhatsappLink(data.whatsapp_link || "");
+  }
+
+  async function saveSettings() {
+    setSettingsMessage("");
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ whatsapp_link: whatsappLink }),
+    });
+    const data = await res.json();
+    setSettingsMessage(data.success ? "Saved." : `Failed: ${data.error}`);
+  }
+
   function emptyManualForm() {
     return {
       id: null,
@@ -142,6 +163,7 @@ export default function Admin() {
       loadOrders();
       loadDashboard();
       loadManualProducts();
+      loadSettings();
     })();
   }, []);
 
@@ -314,6 +336,12 @@ export default function Admin() {
               className={tab === "debug" ? "underline" : ""}
             >
               Debug payment
+            </button>
+            <button
+              onClick={() => setTab("settings")}
+              className={tab === "settings" ? "underline" : ""}
+            >
+              Settings
             </button>
           </nav>
         </div>
@@ -777,6 +805,31 @@ export default function Admin() {
                 {JSON.stringify(debugResult, null, 2)}
               </pre>
             )}
+          </div>
+        )}
+        {tab === "settings" && (
+          <div className="max-w-md space-y-4">
+            <h2 className="font-display text-lg">Site settings</h2>
+            <label className="block text-sm">
+              WhatsApp channel link
+              <input
+                value={whatsappLink}
+                onChange={(e) => setWhatsappLink(e.target.value)}
+                placeholder="https://chat.whatsapp.com/…"
+                className="w-full mt-1 border border-line px-3 py-2 bg-paper text-sm"
+              />
+            </label>
+            <p className="text-xs text-wire">
+              Shown as a floating button on the storefront and customer pages once
+              set. Leave empty to hide the button.
+            </p>
+            <button
+              onClick={saveSettings}
+              className="px-4 py-2 bg-ink text-paper text-sm"
+            >
+              Save
+            </button>
+            {settingsMessage && <p className="text-sm text-wire">{settingsMessage}</p>}
           </div>
         )}
       </main>

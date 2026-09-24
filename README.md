@@ -231,6 +231,15 @@ A review turned up several real issues, now fixed:
   scheduler (cron-job.org) at that same URL — see the Vercel Hobby
   cron note above.
 
+## WhatsApp channel button
+
+`/admin` → **Settings** tab — paste your WhatsApp channel/group
+invite link, Save. A floating "Join our WhatsApp" button then appears
+on every customer-facing page (storefront, wallet, orders, login) —
+hidden automatically if the link is empty, and never shown on `/admin`
+itself. Reuses the existing `app_meta` table, no new environment
+variable or migration needed.
+
 ## Manual products (Phase 1)
 
 Products that aren't fulfilled by DigiTrust at all — the admin sets

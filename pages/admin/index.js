@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import SEO from "../../components/SEO";
 
 export default function Admin() {
   const [checking, setChecking] = useState(true);
@@ -300,9 +301,10 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-paper text-ink font-body">
+      <SEO title="Admin" path="/admin" noindex />
       <header className="border-b border-line">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-display text-2xl">Admin</span>
+          <span className="font-display text-2xl">Digital Planet 🌍 — Admin</span>
           <nav className="text-sm space-x-4 sm:space-x-5">
             <button
               onClick={() => setTab("dashboard")}

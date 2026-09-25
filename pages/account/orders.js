@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import PaymentPanel from "../../components/PaymentPanel";
+import SEO from "../../components/SEO";
+import { SITE_NAME } from "../../lib/siteConfig";
 
 const STATUS_LABEL = {
   pending_payment: "Waiting for payment",
@@ -50,10 +52,11 @@ export default function Orders() {
 
   return (
     <div className="min-h-screen bg-paper text-ink font-body">
+      <SEO title="My orders" path="/account/orders" noindex />
       <header className="border-b border-line">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-2xl">
-            Ledger Stock
+            {SITE_NAME}
           </Link>
           <nav className="text-sm space-x-5">
             <Link href="/account/wallet" className="hover:underline">

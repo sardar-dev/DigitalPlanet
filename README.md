@@ -240,6 +240,41 @@ hidden automatically if the link is empty, and never shown on `/admin`
 itself. Reuses the existing `app_meta` table, no new environment
 variable or migration needed.
 
+## Branding, SEO, and UX polish
+
+- **Site name**: "Digital Planet 🌍" — set once in `lib/siteConfig.js`
+  (`SITE_NAME`), used everywhere (headers, page titles, meta tags).
+- **`NEXT_PUBLIC_SITE_URL`**: set this to your real domain once you
+  have one (defaults to the current `.vercel.app` URL) — it's used in
+  canonical links, Open Graph tags, and the sitemap.
+- **SEO**: every page has a unique `<title>`, meta description,
+  canonical URL, Open Graph + Twitter card tags, and an emoji favicon
+  (no image file needed) — see `components/SEO.js`. Account/admin
+  pages are marked `noindex` (private, shouldn't show up in search).
+  `/robots.txt` and `/sitemap.xml` are generated dynamically. The
+  homepage is now server-rendered (`getServerSideProps`) so Google
+  (and the first paint) sees the actual product list immediately
+  instead of an empty page that fills in via JavaScript — this is the
+  single biggest lever for search ranking on a site like this.
+  Getting indexed and ranked also takes time and depends on backlinks
+  and content beyond what code alone controls — submit the site in
+  Google Search Console once it's live for faster indexing.
+- **Terms of Service** (`/terms`) and **Privacy Policy** (`/privacy`):
+  drafted as reasonable generic templates covering digital goods,
+  USDT payments being irreversible, refund policy, and data handling.
+  These are not legal advice — have them reviewed for your
+  jurisdiction before relying on them, especially given crypto
+  payments.
+- **Password show/hide**: login, signup, and reset-password pages all
+  have a "Show"/"Hide" toggle on password fields.
+- **Order summary before payment**: checkout now has a review step
+  (product, quantity, unit price, total, delivery email if
+  applicable) between filling in quantity and actually creating the
+  order / going to payment.
+- **Copy button on `/account/wallet`**: the top-up wallet address now
+  has the same "Copy address" button (with "Copied!" confirmation) as
+  the checkout payment panel.
+
 ## Manual products (Phase 1)
 
 Products that aren't fulfilled by DigiTrust at all — the admin sets

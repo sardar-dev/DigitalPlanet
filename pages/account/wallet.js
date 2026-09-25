@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import SEO from "../../components/SEO";
+import { SITE_NAME } from "../../lib/siteConfig";
 
 export default function Wallet() {
   const [balance, setBalance] = useState(null);
@@ -9,6 +11,7 @@ export default function Wallet() {
   const [status, setStatus] = useState("idle"); // idle | verifying | done | error
   const [message, setMessage] = useState("");
   const [ledger, setLedger] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     load();
@@ -73,6 +76,16 @@ export default function Wallet() {
     setLedger(entries);
   }
 
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(payoutWallet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard API unavailable — address is still visible as text.
+    }
+  }
+
   async function submitTopup() {
     setStatus("verifying");
     setMessage("");
@@ -95,10 +108,11 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen bg-paper text-ink font-body">
+      <SEO title="Wallet" path="/account/wallet" noindex />
       <header className="border-b border-line">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-2xl">
-            Ledger Stock
+            {SITE_NAME}
           </Link>
           <nav className="text-sm space-x-5">
             <Link href="/account/orders" className="hover:underline">
@@ -124,9 +138,14 @@ export default function Wallet() {
             once confirmed on-chain.
           </p>
           {payoutWallet && (
-            <p className="font-mono text-xs break-all bg-white border border-line p-3">
-              {payoutWallet}
-            </p>
+            <div className="space-y-2">
+              <p className="font-mono text-xs break-all bg-white border border-line p-3">
+                {payoutWallet}
+              </p>
+              <button onClick={copyAddress} className="text-xs underline">
+                {copied ? "Copied!" : "Copy address"}
+              </button>
+            </div>
           )}
           <label className="block text-sm">
             Transaction hash

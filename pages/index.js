@@ -1,12 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
+import { supabaseAdmin } from "../lib/supabaseAdmin";
 import PaymentPanel from "../components/PaymentPanel";
+import SEO from "../components/SEO";
+import { SITE_NAME, SITE_TAGLINE } from "../lib/siteConfig";
 
-export default function Storefront() {
+// Server-rendered so search engines (and the first paint) see the
+// actual product list immediately, not an empty page that fills in
+// after a client-side fetch.
+export async function getServerSideProps() {
+  const { data } = await supabaseAdmin
+    .from("products")
+    .select(
+      "id, title, description, sell_price, available_stock, requires_email, delivery, provider, updated_at"
+    )
+    .eq("selected", true)
+    .gt("available_stock", 0)
+    .order("title", { ascending: true });
+
+  return { props: { initialProducts: data || [] } };
+}
+
+export default function Storefront({ initialProducts }) {
   const [session, setSession] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState(initialProducts || []);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [active, setActive] = useState(null); // product being purchased
   const [search, setSearch] = useState("");
@@ -14,12 +33,17 @@ export default function Storefront() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    loadProducts();
+    // Quiet background refresh — we already have server-rendered data
+    // to show, this just keeps stock/price current without a loading
+    // flash. Falls back to a visible error only if we truly have
+    // nothing to show.
+    loadProducts(products.length === 0);
     return () => sub.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function loadProducts() {
-    setLoading(true);
+  function loadProducts(showLoadingState = true) {
+    if (showLoadingState) setLoading(true);
     setLoadError(false);
     fetch("/api/products")
       .then((r) => {
@@ -30,7 +54,9 @@ export default function Storefront() {
         if (!d.success) throw new Error("bad_response");
         setProducts(d.products || []);
       })
-      .catch(() => setLoadError(true))
+      .catch(() => {
+        if (products.length === 0) setLoadError(true);
+      })
       .finally(() => setLoading(false));
   }
 
@@ -47,10 +73,11 @@ export default function Storefront() {
   }, [products, search]);
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body">
+    <div className="min-h-screen bg-paper text-ink font-body flex flex-col">
+      <SEO />
       <header className="border-b border-line">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-display text-2xl">Ledger Stock</span>
+          <span className="font-display text-2xl">{SITE_NAME}</span>
           <nav className="text-sm space-x-4 sm:space-x-5">
             {session ? (
               <>
@@ -81,10 +108,11 @@ export default function Storefront() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 flex-1 w-full">
+        <h1 className="font-display text-xl mb-2">{SITE_NAME}</h1>
         <p className="text-sm text-wire mb-6 max-w-md">
-          Every item here is confirmed in stock right now. Pay in USDT
-          (BEP20) and delivery happens automatically once your
+          {SITE_TAGLINE}. Every item here is confirmed in stock right now — pay
+          with USDT (BEP20) and delivery happens automatically once your
           transaction is confirmed on-chain.
         </p>
 
@@ -95,11 +123,11 @@ export default function Storefront() {
           className="w-full mb-6 border border-line px-3 py-2 bg-paper text-sm"
         />
 
-        {loading && <p className="text-sm">Loading stock…</p>}
+        {loading && products.length === 0 && <p className="text-sm">Loading stock…</p>}
         {loadError && (
           <div className="text-sm text-signal space-y-2">
             <p>Couldn't load products right now — something's wrong on our end.</p>
-            <button onClick={loadProducts} className="underline">
+            <button onClick={() => loadProducts(true)} className="underline">
               Try again
             </button>
           </div>
@@ -149,6 +177,18 @@ export default function Storefront() {
         </ul>
       </main>
 
+      <footer className="border-t border-line mt-10">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-xs text-wire flex flex-wrap gap-x-4 gap-y-1">
+          <span>© {new Date().getFullYear()} {SITE_NAME}</span>
+          <Link href="/terms" className="hover:underline">
+            Terms of Service
+          </Link>
+          <Link href="/privacy" className="hover:underline">
+            Privacy Policy
+          </Link>
+        </div>
+      </footer>
+
       {active && (
         <BuyModal product={active} onClose={() => setActive(null)} />
       )}
@@ -157,29 +197,44 @@ export default function Storefront() {
 }
 
 function BuyModal({ product, onClose }) {
-  const [step, setStep] = useState("form"); // form | order | done
+  const [step, setStep] = useState("form"); // form | summary | order | done
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [items, setItems] = useState(null);
   const [manual, setManual] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  async function createOrder() {
+  function reviewOrder() {
     setError("");
+    if (product.requires_email && !email) {
+      setError(describeError("email_required"));
+      return;
+    }
+    setStep("summary");
+  }
+
+  async function confirmOrder() {
+    setError("");
+    setCreating(true);
     const res = await fetch("/api/orders/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ product_id: product.id, quantity, email }),
     });
     const data = await res.json();
+    setCreating(false);
     if (!data.success) {
       setError(describeError(data.error, data.available));
+      setStep("form");
       return;
     }
     setOrder(data.order);
     setStep("order");
   }
+
+  const total = (Number(product.sell_price) * quantity).toFixed(2);
 
   return (
     <div className="fixed inset-0 bg-ink/60 flex items-center justify-center p-4">
@@ -224,11 +279,62 @@ function BuyModal({ product, onClose }) {
             )}
             {error && <p className="text-sm text-signal">{error}</p>}
             <button
-              onClick={createOrder}
+              onClick={reviewOrder}
               className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors"
             >
-              Continue to payment
+              Review order
             </button>
+          </div>
+        )}
+
+        {step === "summary" && (
+          <div className="space-y-4 text-sm">
+            <div className="border border-line divide-y divide-line">
+              <div className="flex justify-between p-3">
+                <span>Product</span>
+                <span className="text-right">{product.title}</span>
+              </div>
+              <div className="flex justify-between p-3">
+                <span>Quantity</span>
+                <span className="font-mono">{quantity}</span>
+              </div>
+              <div className="flex justify-between p-3">
+                <span>Unit price</span>
+                <span className="font-mono">${Number(product.sell_price).toFixed(2)}</span>
+              </div>
+              {product.requires_email && (
+                <div className="flex justify-between p-3">
+                  <span>Delivery email</span>
+                  <span className="text-right break-all">{email}</span>
+                </div>
+              )}
+              {product.provider === "manual" && (
+                <div className="flex justify-between p-3">
+                  <span>Delivery</span>
+                  <span className="text-right">Manual — {product.delivery || "see details"}</span>
+                </div>
+              )}
+              <div className="flex justify-between p-3 font-display text-base">
+                <span>Total</span>
+                <span className="font-mono">${total}</span>
+              </div>
+            </div>
+            {error && <p className="text-signal">{error}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep("form")}
+                className="flex-1 py-2 border border-line text-sm"
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmOrder}
+                disabled={creating}
+                className="flex-1 py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
+              >
+                {creating ? "Creating…" : "Confirm & continue"}
+              </button>
+            </div>
           </div>
         )}
 

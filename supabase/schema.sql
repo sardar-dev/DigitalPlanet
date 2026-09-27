@@ -51,9 +51,11 @@ create table if not exists public.products (
   delivery text default 'instant',    -- DigiTrust: usually 'instant'. Manual: e.g. "Within 1-6 hours"
   selected boolean not null default false,    -- shown on storefront? (also doubles as active/inactive for manual)
   provider text not null default 'digitrust', -- 'digitrust' | 'manual'
+  activation_field text,                      -- 'email' | 'username' | null — what a manual product needs from the customer to activate
   updated_at timestamptz not null default now(),
 
-  constraint products_provider_check check (provider in ('digitrust', 'manual'))
+  constraint products_provider_check check (provider in ('digitrust', 'manual')),
+  constraint products_activation_field_check check (activation_field is null or activation_field in ('email', 'username'))
 );
 
 alter table public.products enable row level security;
@@ -76,6 +78,8 @@ create policy "products: anyone can read selected+in-stock products"
 -- insert a fake order (total=0) directly via the Supabase client and
 -- then "pay" for it with a $0 wallet balance.
 -- ─────────────────────────────────────────────────────────────
+create sequence if not exists public.order_number_seq start with 1000 increment by 1;
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id),
@@ -93,6 +97,8 @@ create table if not exists public.orders (
   expected_amount numeric not null,
   tx_hash text,
   paid_with text not null default 'onchain', -- 'onchain' | 'wallet_balance'
+  activation_info text,                -- customer's email/username for manual-product activation
+  order_number bigint default nextval('public.order_number_seq'), -- short id for support reference
 
   digitrust_order_id bigint,
   items jsonb,                         -- delivered credentials, once fulfilled
@@ -115,6 +121,7 @@ create policy "orders: user can read own orders"
 
 create index if not exists orders_user_id_idx on public.orders (user_id);
 create index if not exists orders_status_idx on public.orders (status);
+create unique index if not exists orders_order_number_idx on public.orders (order_number);
 
 -- ─────────────────────────────────────────────────────────────
 -- wallet_topups: USDT (BEP20) deposits that credit a user's

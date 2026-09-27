@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ success: false, error: "login_required" });
   }
 
-  const { product_id, quantity = 1, email } = req.body || {};
+  const { product_id, quantity = 1, email, activation_info } = req.body || {};
   if (!product_id || quantity < 1) {
     return res.status(400).json({ success: false, error: "invalid_request" });
   }
@@ -36,7 +36,14 @@ export default async function handler(req, res) {
     return res.status(404).json({ success: false, error: "product_not_available" });
   }
 
-  if (localProduct.requires_email && !email) {
+  // Manual products: whatever the admin set as activation_field
+  // ('email' or 'username') is required here. DigiTrust products use
+  // the older, separate requires_email flag.
+  if (localProduct.provider === "manual") {
+    if (localProduct.activation_field && !String(activation_info || "").trim()) {
+      return res.status(400).json({ success: false, error: "activation_info_required" });
+    }
+  } else if (localProduct.requires_email && !email) {
     return res.status(400).json({ success: false, error: "email_required" });
   }
 
@@ -77,6 +84,7 @@ export default async function handler(req, res) {
       unit_price: unitPrice,
       total,
       email: email || null,
+      activation_info: localProduct.provider === "manual" ? (activation_info || null) : null,
       status: "pending_payment",
       payout_wallet: process.env.PAYOUT_WALLET_ADDRESS,
       expected_amount: total,

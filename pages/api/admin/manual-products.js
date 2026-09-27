@@ -33,7 +33,18 @@ export default async function handler(req, res) {
       requires_email,
       delivery, // estimated delivery time text, e.g. "Within 1-6 hours"
       selected, // active/inactive
+      activation_field, // null | 'email' | 'username' — what the customer must provide for activation
     } = req.body || {};
+
+    const validActivation =
+      activation_field === undefined ||
+      activation_field === null ||
+      activation_field === "" ||
+      ["email", "username"].includes(activation_field);
+    if (!validActivation) {
+      return res.status(400).json({ success: false, error: "invalid_activation_field" });
+    }
+    const normalizedActivation = activation_field || null;
 
     // Never trust a price/stock from the client without validating
     // it server-side — these become real charges and real inventory.
@@ -71,9 +82,10 @@ export default async function handler(req, res) {
           cost_price: cost,
           real_stock: stock,
           available_stock: stock,
-          requires_email: Boolean(requires_email),
+          requires_email: Boolean(requires_email) || normalizedActivation === "email",
           delivery: delivery || "Within 24 hours",
           selected: Boolean(selected),
+          activation_field: normalizedActivation,
         })
         .select()
         .single();
@@ -123,6 +135,10 @@ export default async function handler(req, res) {
     if (requires_email !== undefined) patch.requires_email = Boolean(requires_email);
     if (delivery !== undefined) patch.delivery = delivery;
     if (selected !== undefined) patch.selected = Boolean(selected);
+    if (activation_field !== undefined) {
+      patch.activation_field = normalizedActivation;
+      if (normalizedActivation === "email") patch.requires_email = true;
+    }
 
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from("products")

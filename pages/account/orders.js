@@ -68,6 +68,9 @@ export default function Orders() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        <p className="text-xs text-wire mb-4">
+          Need help with an order? Just quote its order number to support.
+        </p>
         {!orders && <p className="text-sm">Loading…</p>}
         {orders && orders.length === 0 && (
           <p className="text-sm text-wire">No orders yet.</p>
@@ -80,6 +83,9 @@ export default function Orders() {
                   {o.products?.title || `Product #${o.product_id}`} × {o.quantity}
                 </span>
                 <span className="font-mono">${Number(o.total).toFixed(2)}</span>
+              </div>
+              <div className="text-xs font-mono text-wire mt-0.5">
+                Order #{o.order_number}
               </div>
               <div className="text-xs text-wire mt-1">
                 {STATUS_LABEL[o.status] || o.status} ·{" "}

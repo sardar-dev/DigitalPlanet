@@ -13,7 +13,7 @@ export async function getServerSideProps() {
   const { data } = await supabaseAdmin
     .from("products")
     .select(
-      "id, title, description, sell_price, available_stock, requires_email, delivery, provider, updated_at"
+      "id, title, description, sell_price, available_stock, requires_email, delivery, provider, activation_field, updated_at"
     )
     .eq("selected", true)
     .gt("available_stock", 0)
@@ -200,16 +200,28 @@ function BuyModal({ product, onClose }) {
   const [step, setStep] = useState("form"); // form | summary | order | done
   const [quantity, setQuantity] = useState(1);
   const [email, setEmail] = useState("");
+  const [activationInfo, setActivationInfo] = useState("");
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [items, setItems] = useState(null);
   const [manual, setManual] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  const activationLabel =
+    product.activation_field === "email"
+      ? "Your email (for activation)"
+      : product.activation_field === "username"
+      ? "Your username (for activation)"
+      : null;
+
   function reviewOrder() {
     setError("");
     if (product.requires_email && !email) {
       setError(describeError("email_required"));
+      return;
+    }
+    if (product.provider === "manual" && product.activation_field && !activationInfo.trim()) {
+      setError(describeError("activation_info_required"));
       return;
     }
     setStep("summary");
@@ -221,7 +233,12 @@ function BuyModal({ product, onClose }) {
     const res = await fetch("/api/orders/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: product.id, quantity, email }),
+      body: JSON.stringify({
+        product_id: product.id,
+        quantity,
+        email,
+        activation_info: activationInfo,
+      }),
     });
     const data = await res.json();
     setCreating(false);
@@ -277,6 +294,21 @@ function BuyModal({ product, onClose }) {
                 />
               </label>
             )}
+            {activationLabel && (
+              <label className="block text-sm">
+                {activationLabel}
+                <input
+                  type="text"
+                  value={activationInfo}
+                  onChange={(e) => setActivationInfo(e.target.value)}
+                  placeholder={activationLabel}
+                  className="w-full mt-1 border border-line px-3 py-2 bg-paper"
+                />
+                <span className="block text-xs text-wire mt-1">
+                  We'll use this to activate your subscription after payment.
+                </span>
+              </label>
+            )}
             {error && <p className="text-sm text-signal">{error}</p>}
             <button
               onClick={reviewOrder}
@@ -306,6 +338,12 @@ function BuyModal({ product, onClose }) {
                 <div className="flex justify-between p-3">
                   <span>Delivery email</span>
                   <span className="text-right break-all">{email}</span>
+                </div>
+              )}
+              {activationLabel && (
+                <div className="flex justify-between p-3">
+                  <span>{activationLabel.replace(" (for activation)", "")}</span>
+                  <span className="text-right break-all">{activationInfo}</span>
                 </div>
               )}
               {product.provider === "manual" && (
@@ -351,13 +389,14 @@ function BuyModal({ product, onClose }) {
 
         {step === "done" && manual && (
           <div className="space-y-3 text-sm">
+            <p className="font-mono text-xs text-wire">Order #{order?.order_number}</p>
             <p>
               Payment confirmed. This product is delivered manually — estimated delivery{" "}
               <strong>{product.delivery || "soon"}</strong>. Check{" "}
               <Link href="/account/orders" className="underline">
                 My Orders
               </Link>{" "}
-              once it's ready.
+              once it's ready. If you need support, just quote your order number above.
             </p>
             <button onClick={onClose} className="w-full py-2 bg-ink text-paper">
               Done
@@ -367,6 +406,7 @@ function BuyModal({ product, onClose }) {
 
         {step === "done" && !manual && (
           <div className="space-y-3 text-sm">
+            <p className="font-mono text-xs text-wire">Order #{order?.order_number}</p>
             <p>Delivered. Save these now:</p>
             <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">
               {(items || []).join("\n")}
@@ -386,6 +426,8 @@ function describeError(code, available) {
       return `Only ${available} left — lower the quantity and try again.`;
     case "email_required":
       return "This product needs an email address for delivery.";
+    case "activation_info_required":
+      return "Please enter the info needed to activate your subscription.";
     default:
       return code ? code.replaceAll("_", " ") : "Something went wrong.";
   }

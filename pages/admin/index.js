@@ -61,6 +61,7 @@ export default function Admin() {
       requires_email: false,
       delivery: "Within 1-6 hours",
       selected: true,
+      activation_field: "",
     };
   }
 
@@ -82,6 +83,7 @@ export default function Admin() {
       requires_email: manualForm.requires_email,
       delivery: manualForm.delivery,
       selected: manualForm.selected,
+      activation_field: manualForm.activation_field || null,
     };
     const res = await fetch("/api/admin/manual-products", {
       method: "POST",
@@ -109,6 +111,7 @@ export default function Admin() {
       requires_email: p.requires_email,
       delivery: p.delivery || "",
       selected: p.selected,
+      activation_field: p.activation_field || "",
     });
   }
 
@@ -122,13 +125,16 @@ export default function Admin() {
     loadManualProducts();
   }
 
-  async function deliverManualOrder(orderId) {
-    const items = prompt("Paste the delivered item(s)/instructions, one per line:");
+  async function deliverManualOrder(order) {
+    const hint = order.activation_info ? ` (activation: ${order.activation_info})` : "";
+    const items = prompt(
+      `Paste the delivered item(s)/instructions, one per line${hint}:`
+    );
     if (!items) return;
     const res = await fetch("/api/admin/manual-deliver", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: orderId, items }),
+      body: JSON.stringify({ order_id: order.id, items }),
     });
     const data = await res.json();
     if (!data.success) alert(`Failed: ${data.error}`);
@@ -286,6 +292,7 @@ export default function Admin() {
       (o) =>
         (o.products?.title || "").toLowerCase().includes(q) ||
         (o.tx_hash || "").toLowerCase().includes(q) ||
+        String(o.order_number || "").includes(q) ||
         o.status.toLowerCase().includes(q)
     );
   }, [orders, orderSearch]);
@@ -569,15 +576,23 @@ export default function Admin() {
                   placeholder='Estimated delivery, e.g. "Within 1-6 hours"'
                   className="w-full border border-line px-3 py-2 bg-paper"
                 />
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={manualForm.requires_email}
+                <label className="block text-sm">
+                  Activation info needed from customer
+                  <select
+                    value={manualForm.activation_field}
                     onChange={(e) =>
-                      setManualForm({ ...manualForm, requires_email: e.target.checked })
+                      setManualForm({ ...manualForm, activation_field: e.target.value })
                     }
-                  />
-                  Requires customer email at checkout
+                    className="w-full mt-1 border border-line px-3 py-2 bg-paper"
+                  >
+                    <option value="">None</option>
+                    <option value="email">Email</option>
+                    <option value="username">Username</option>
+                  </select>
+                  <span className="block text-xs text-wire mt-1">
+                    Shown to the customer as the box's label/placeholder at checkout, so
+                    they know exactly what to provide for activation.
+                  </span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -619,6 +634,7 @@ export default function Admin() {
                       <th className="py-2 pr-2">Stock</th>
                       <th className="py-2 pr-2">Sell price</th>
                       <th className="py-2 pr-2">Cost</th>
+                      <th className="py-2 pr-2">Activation</th>
                       <th className="py-2 pr-2">Active</th>
                       <th className="py-2 pr-2">Actions</th>
                     </tr>
@@ -632,6 +648,7 @@ export default function Admin() {
                         <td className="py-2 pr-2 font-mono text-wire">
                           ${Number(p.cost_price).toFixed(2)}
                         </td>
+                        <td className="py-2 pr-2">{p.activation_field || "—"}</td>
                         <td className="py-2 pr-2">{p.selected ? "Yes" : "No"}</td>
                         <td className="py-2 pr-2 space-x-2 whitespace-nowrap">
                           <button onClick={() => editManualProduct(p)} className="underline">
@@ -683,10 +700,12 @@ export default function Admin() {
               <table className="w-full text-sm border-t border-line min-w-[720px]">
                 <thead>
                   <tr className="text-left text-wire border-b border-line">
+                    <th className="py-2 pr-2">Order #</th>
                     <th className="py-2 pr-2">Product</th>
                     <th className="py-2 pr-2">Total</th>
                     <th className="py-2 pr-2">Paid with</th>
                     <th className="py-2 pr-2">Status</th>
+                    <th className="py-2 pr-2">Activation info</th>
                     <th className="py-2 pr-2">Tx hash</th>
                     <th className="py-2 pr-2">Actions</th>
                   </tr>
@@ -694,10 +713,14 @@ export default function Admin() {
                 <tbody>
                   {visibleOrders.map((o) => (
                     <tr key={o.id} className="border-b border-line align-top">
+                      <td className="py-2 pr-2 font-mono">{o.order_number}</td>
                       <td className="py-2 pr-2">{o.products?.title}</td>
                       <td className="py-2 pr-2 font-mono">${Number(o.total).toFixed(2)}</td>
                       <td className="py-2 pr-2">{o.paid_with || "onchain"}</td>
                       <td className="py-2 pr-2">{o.status}</td>
+                      <td className="py-2 pr-2 break-all max-w-[140px]">
+                        {o.activation_info || "—"}
+                      </td>
                       <td className="py-2 pr-2 font-mono text-xs break-all max-w-[160px]">
                         {o.tx_hash || "—"}
                       </td>
@@ -712,7 +735,7 @@ export default function Admin() {
                         )}
                         {o.status === "awaiting_manual_fulfillment" && (
                           <button
-                            onClick={() => deliverManualOrder(o.id)}
+                            onClick={() => deliverManualOrder(o)}
                             className="underline"
                           >
                             Deliver

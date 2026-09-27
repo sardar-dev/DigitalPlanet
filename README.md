@@ -231,6 +231,26 @@ A review turned up several real issues, now fixed:
   scheduler (cron-job.org) at that same URL — see the Vercel Hobby
   cron note above.
 
+## Activation info box + order numbers
+
+For a manual product, `/admin` → Manual Products → **"Activation info
+needed from customer"** dropdown: None / Email / Username. Whatever
+you pick becomes the exact label/placeholder the customer sees at
+checkout ("Your email (for activation)" or "Your username (for
+activation)") — no separate placeholder text to configure, the choice
+drives it directly. What the customer types is stored on the order
+and shown to you in `/admin` → Orders → **Activation info** column
+(and reminded to you again in the "Deliver" prompt), so you know
+exactly what to activate.
+
+Every order also gets a short, sequential **order number** (`#1000`,
+`#1001`, …) instead of a long UUID — shown to the customer in
+`/account/orders` and on the checkout confirmation screen, and to you
+in `/admin` → Orders (searchable there too). Quote it for support
+instead of the internal id.
+
+**Migration**: run `supabase/migration_007_manual_activation_and_order_number.sql`.
+
 ## WhatsApp channel button
 
 `/admin` → **Settings** tab — paste your WhatsApp channel/group

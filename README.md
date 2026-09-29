@@ -1,4 +1,4 @@
-# Ledger Stock — DigiTrust reseller storefront
+# DigiVerse — DigiTrust reseller storefront
 
 A single-reseller storefront on top of the DigiTrust bot API. You pick
 which DigiTrust products are shown, customers pay in USDT (BEP20) and
@@ -262,7 +262,7 @@ variable or migration needed.
 
 ## Branding, SEO, and UX polish
 
-- **Site name**: "Digital Planet 🌍" — set once in `lib/siteConfig.js`
+- **Site name**: "DigiVerse 🌌" — set once in `lib/siteConfig.js`
   (`SITE_NAME`), used everywhere (headers, page titles, meta tags).
 - **`NEXT_PUBLIC_SITE_URL`**: set this to your real domain once you
   have one (defaults to the current `.vercel.app` URL) — it's used in

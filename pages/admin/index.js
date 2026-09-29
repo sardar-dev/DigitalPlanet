@@ -311,7 +311,7 @@ export default function Admin() {
       <SEO title="Admin" path="/admin" noindex />
       <header className="border-b border-line">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-display text-2xl">Digital Planet 🌍 — Admin</span>
+          <span className="font-display text-2xl">DigiVerse 🌌 — Admin</span>
           <nav className="text-sm space-x-4 sm:space-x-5">
             <button
               onClick={() => setTab("dashboard")}

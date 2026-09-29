@@ -13,7 +13,7 @@ export default function SEO({
   const url = `${SITE_URL}${path}`;
   const desc =
     description ||
-    "Digital Planet — buy digital products and accounts instantly online, pay with USDT (BEP20) or wallet balance.";
+    "DigiVerse — buy digital products and accounts instantly online, pay with USDT (BEP20) or wallet balance.";
 
   return (
     <Head>
@@ -38,7 +38,7 @@ export default function SEO({
       <link
         rel="icon"
         href={`data:image/svg+xml,${encodeURIComponent(
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌍</text></svg>'
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌌</text></svg>'
         )}`}
       />
       <meta name="viewport" content="width=device-width, initial-scale=1" />

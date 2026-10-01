@@ -147,9 +147,6 @@ export default function Storefront({ initialProducts }) {
             >
               <div>
                 <div className="font-display text-lg">{p.title}</div>
-                {p.description && (
-                  <div className="text-sm text-wire mt-1">{p.description}</div>
-                )}
                 {p.provider === "manual" && (
                   <div className="text-xs mt-1">
                     <span className="inline-block border border-line px-2 py-0.5">
@@ -256,12 +253,16 @@ function BuyModal({ product, onClose }) {
   return (
     <div className="fixed inset-0 bg-ink/60 flex items-center justify-center p-4">
       <div className="bg-paper max-w-md w-full p-6 border border-line max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-start mb-4">
+        <div className="flex justify-between items-start mb-1">
           <h2 className="font-display text-xl">{product.title}</h2>
           <button onClick={onClose} className="text-sm text-wire hover:text-ink">
             Close
           </button>
         </div>
+        {product.description && (
+          <p className="text-sm text-wire mb-4">{product.description}</p>
+        )}
+        {!product.description && <div className="mb-4" />}
 
         {step === "form" && (
           <div className="space-y-4">

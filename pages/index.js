@@ -4,6 +4,15 @@ import { supabase } from "../lib/supabaseClient";
 import { supabaseAdmin } from "../lib/supabaseAdmin";
 import PaymentPanel from "../components/PaymentPanel";
 import SEO from "../components/SEO";
+import SiteHeader from "../components/layout/SiteHeader";
+import SiteFooter from "../components/layout/SiteFooter";
+import PageContainer from "../components/layout/PageContainer";
+import ProductCard from "../components/ui/ProductCard";
+import Modal from "../components/ui/Modal";
+import Alert from "../components/ui/Alert";
+import { FormInput } from "../components/ui/FormInput";
+import { PrimaryButton, SecondaryButton } from "../components/ui/Button";
+import { EmptyState, ErrorState, LoadingState } from "../components/ui/States";
 import { SITE_NAME, SITE_TAGLINE } from "../lib/siteConfig";
 
 // Server-rendered so search engines (and the first paint) see the
@@ -73,122 +82,115 @@ export default function Storefront({ initialProducts }) {
   }, [products, search]);
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body flex flex-col">
+    <div className="flex min-h-screen flex-col bg-bg font-body text-ink">
       <SEO />
-      <header className="border-b border-line">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-display text-2xl">{SITE_NAME}</span>
-          <nav className="text-sm space-x-4 sm:space-x-5">
-            {session ? (
-              <>
-                <Link href="/account/wallet" className="hover:underline">
-                  Wallet
-                </Link>
-                <Link href="/account/orders" className="hover:underline">
-                  My orders
-                </Link>
-                <button
-                  onClick={() => supabase.auth.signOut()}
-                  className="hover:underline"
-                >
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link href="/login" className="hover:underline">
-                  Log in
-                </Link>
-                <Link href="/signup" className="hover:underline">
-                  Sign up
-                </Link>
-              </>
+      <SiteHeader session={session} onSignOut={() => supabase.auth.signOut()} />
+
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="border-b border-border bg-surface">
+          <PageContainer className="grid gap-8 py-14 sm:py-16 md:grid-cols-2 md:items-center">
+            <div>
+              <h1 className="text-3xl font-semibold leading-tight text-ink sm:text-4xl">
+                Digital products, without the wait.
+              </h1>
+              <p className="mt-4 max-w-md text-base text-muted">
+                Buy verified digital products and accounts, paid for with your
+                wallet balance or USDT on BEP20. Automatic items deliver the
+                moment payment confirms; manual items follow shortly after.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <a href="#catalog">
+                  <PrimaryButton>Browse products</PrimaryButton>
+                </a>
+                <a href="#how-it-works">
+                  <SecondaryButton>How it works</SecondaryButton>
+                </a>
+              </div>
+            </div>
+            <div className="hidden md:block" aria-hidden="true">
+              <svg viewBox="0 0 400 300" className="w-full max-w-sm mx-auto">
+                <rect x="40" y="40" width="320" height="220" rx="16" fill="#EDF2FB" />
+                <rect x="64" y="72" width="140" height="16" rx="8" fill="#3169F5" />
+                <rect x="64" y="104" width="220" height="10" rx="5" fill="#DFE5F0" />
+                <rect x="64" y="124" width="180" height="10" rx="5" fill="#DFE5F0" />
+                <rect x="64" y="160" width="272" height="64" rx="12" fill="#FFFFFF" stroke="#DFE5F0" />
+                <circle cx="96" cy="192" r="16" fill="#73A0FF" />
+                <rect x="124" y="184" width="100" height="8" rx="4" fill="#DFE5F0" />
+                <rect x="124" y="198" width="60" height="8" rx="4" fill="#DFE5F0" />
+                <rect x="276" y="178" width="48" height="28" rx="8" fill="#3169F5" />
+              </svg>
+            </div>
+          </PageContainer>
+        </section>
+
+        {/* Trust indicators */}
+        <section id="how-it-works" className="border-b border-border">
+          <PageContainer className="grid grid-cols-2 gap-4 py-8 sm:grid-cols-4">
+            {[
+              { label: "Verified stock", icon: "✓" },
+              { label: "Secure BEP20 payment", icon: "🔒" },
+              { label: "Fast delivery", icon: "⚡" },
+              { label: "Customer support", icon: "💬" },
+            ].map((t) => (
+              <div key={t.label} className="flex items-center gap-2 text-sm text-muted">
+                <span aria-hidden="true">{t.icon}</span>
+                <span>{t.label}</span>
+              </div>
+            ))}
+          </PageContainer>
+        </section>
+
+        {/* Catalog */}
+        <section id="catalog">
+          <PageContainer className="py-10">
+            <div className="mb-6 max-w-sm">
+              <FormInput
+                label="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search products…"
+                aria-label="Search products"
+              />
+            </div>
+
+            {loading && products.length === 0 && <LoadingState label="Loading stock…" />}
+
+            {loadError && (
+              <ErrorState
+                title="Couldn't load products"
+                description="Something's wrong on our end — please try again."
+                onRetry={() => loadProducts(true)}
+              />
             )}
-          </nav>
-        </div>
-      </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 flex-1 w-full">
-        <h1 className="font-display text-xl mb-2">{SITE_NAME}</h1>
-        <p className="text-sm text-wire mb-6 max-w-md">
-          {SITE_TAGLINE}. Every item here is confirmed in stock right now — pay
-          with USDT (BEP20) and delivery happens automatically once your
-          transaction is confirmed on-chain.
-        </p>
+            {!loading && !loadError && products.length === 0 && (
+              <EmptyState
+                title="Nothing in stock right now"
+                description="Check back soon — new stock is added regularly."
+              />
+            )}
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products…"
-          className="w-full mb-6 border border-line px-3 py-2 bg-paper text-sm"
-        />
+            {!loading && !loadError && products.length > 0 && visible.length === 0 && (
+              <EmptyState title={`No products match "${search}"`} />
+            )}
 
-        {loading && products.length === 0 && <p className="text-sm">Loading stock…</p>}
-        {loadError && (
-          <div className="text-sm text-signal space-y-2">
-            <p>Couldn't load products right now — something's wrong on our end.</p>
-            <button onClick={() => loadProducts(true)} className="underline">
-              Try again
-            </button>
-          </div>
-        )}
-        {!loading && !loadError && products.length === 0 && (
-          <p className="text-sm text-wire">Nothing in stock right now — check back soon.</p>
-        )}
-        {!loading && !loadError && products.length > 0 && visible.length === 0 && (
-          <p className="text-sm text-wire">No products match "{search}".</p>
-        )}
-
-        <ul className="divide-y divide-line border-t border-b border-line">
-          {visible.map((p) => (
-            <li
-              key={p.id}
-              className="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            >
-              <div>
-                <div className="font-display text-lg">{p.title}</div>
-                {p.provider === "manual" && (
-                  <div className="text-xs mt-1">
-                    <span className="inline-block border border-line px-2 py-0.5">
-                      Manual delivery — {p.delivery || "see details"}
-                    </span>
-                  </div>
-                )}
-                <div className="text-xs font-mono text-wire mt-1">
-                  {p.available_stock} available
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-lg">${Number(p.sell_price).toFixed(2)}</span>
-                <button
-                  onClick={() =>
-                    session ? setActive(p) : (window.location.href = "/login")
-                  }
-                  className="px-4 py-2 bg-ink text-paper text-sm hover:bg-wire transition-colors"
-                >
-                  Buy
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {visible.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onBuy={() => (session ? setActive(p) : (window.location.href = "/login"))}
+                />
+              ))}
+            </div>
+          </PageContainer>
+        </section>
       </main>
 
-      <footer className="border-t border-line mt-10">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-xs text-wire flex flex-wrap gap-x-4 gap-y-1">
-          <span>© {new Date().getFullYear()} {SITE_NAME}</span>
-          <Link href="/terms" className="hover:underline">
-            Terms of Service
-          </Link>
-          <Link href="/privacy" className="hover:underline">
-            Privacy Policy
-          </Link>
-        </div>
-      </footer>
+      <SiteFooter />
 
-      {active && (
-        <BuyModal product={active} onClose={() => setActive(null)} />
-      )}
+      {active && <BuyModal product={active} onClose={() => setActive(null)} />}
     </div>
   );
 }
@@ -249,178 +251,145 @@ function BuyModal({ product, onClose }) {
   }
 
   const total = (Number(product.sell_price) * quantity).toFixed(2);
+  const stepLabels = { form: "1. Details", summary: "2. Review", order: "3. Payment", done: "4. Done" };
 
   return (
-    <div className="fixed inset-0 bg-ink/60 flex items-center justify-center p-4">
-      <div className="bg-paper max-w-md w-full p-6 border border-line max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-start mb-1">
-          <h2 className="font-display text-xl">{product.title}</h2>
-          <button onClick={onClose} className="text-sm text-wire hover:text-ink">
-            Close
-          </button>
-        </div>
-        {product.description && (
-          <p className="text-sm text-wire mb-4">{product.description}</p>
-        )}
-        {!product.description && <div className="mb-4" />}
+    <Modal title={product.title} onClose={onClose}>
+      {step !== "done" && (
+        <p className="mb-4 text-xs font-medium uppercase tracking-wide text-muted">
+          {stepLabels[step]}
+        </p>
+      )}
 
-        {step === "form" && (
-          <div className="space-y-4">
-            {product.provider === "manual" && (
-              <p className="text-xs border border-line p-3 bg-white">
-                This product is delivered manually. Estimated delivery:{" "}
-                <strong>{product.delivery || "see details"}</strong>. You'll find it in{" "}
-                <strong>My Orders</strong> once it's ready.
-              </p>
-            )}
-            <label className="block text-sm">
-              Quantity
-              <input
-                type="number"
-                min={1}
-                max={product.available_stock}
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-full mt-1 border border-line px-3 py-2 bg-paper"
-              />
-            </label>
-            {product.requires_email && (
-              <label className="block text-sm">
-                Email for delivery
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full mt-1 border border-line px-3 py-2 bg-paper"
-                />
-              </label>
-            )}
-            {activationLabel && (
-              <label className="block text-sm">
-                {activationLabel}
-                <input
-                  type="text"
-                  value={activationInfo}
-                  onChange={(e) => setActivationInfo(e.target.value)}
-                  placeholder={activationLabel}
-                  className="w-full mt-1 border border-line px-3 py-2 bg-paper"
-                />
-                <span className="block text-xs text-wire mt-1">
-                  We'll use this to activate your subscription after payment.
-                </span>
-              </label>
-            )}
-            {error && <p className="text-sm text-signal">{error}</p>}
-            <button
-              onClick={reviewOrder}
-              className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors"
-            >
-              Review order
-            </button>
-          </div>
-        )}
+      {product.description && step === "form" && (
+        <p className="mb-4 text-sm text-muted">{product.description}</p>
+      )}
 
-        {step === "summary" && (
-          <div className="space-y-4 text-sm">
-            <div className="border border-line divide-y divide-line">
-              <div className="flex justify-between p-3">
-                <span>Product</span>
-                <span className="text-right">{product.title}</span>
-              </div>
-              <div className="flex justify-between p-3">
-                <span>Quantity</span>
-                <span className="font-mono">{quantity}</span>
-              </div>
-              <div className="flex justify-between p-3">
-                <span>Unit price</span>
-                <span className="font-mono">${Number(product.sell_price).toFixed(2)}</span>
-              </div>
-              {product.requires_email && (
-                <div className="flex justify-between p-3">
-                  <span>Delivery email</span>
-                  <span className="text-right break-all">{email}</span>
-                </div>
-              )}
-              {activationLabel && (
-                <div className="flex justify-between p-3">
-                  <span>{activationLabel.replace(" (for activation)", "")}</span>
-                  <span className="text-right break-all">{activationInfo}</span>
-                </div>
-              )}
-              {product.provider === "manual" && (
-                <div className="flex justify-between p-3">
-                  <span>Delivery</span>
-                  <span className="text-right">Manual — {product.delivery || "see details"}</span>
-                </div>
-              )}
-              <div className="flex justify-between p-3 font-display text-base">
-                <span>Total</span>
-                <span className="font-mono">${total}</span>
-              </div>
-            </div>
-            {error && <p className="text-signal">{error}</p>}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep("form")}
-                className="flex-1 py-2 border border-line text-sm"
-              >
-                Back
-              </button>
-              <button
-                onClick={confirmOrder}
-                disabled={creating}
-                className="flex-1 py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-              >
-                {creating ? "Creating…" : "Confirm & continue"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === "order" && order && (
-          <PaymentPanel
-            order={order}
-            onDone={(result) => {
-              setItems(result.items);
-              setManual(result.manual);
-              setStep("done");
-            }}
+      {step === "form" && (
+        <div className="space-y-4">
+          {product.provider === "manual" && (
+            <Alert variant="warning">
+              This product is delivered manually. Estimated delivery:{" "}
+              <strong>{product.delivery || "see details"}</strong>. You'll find it in{" "}
+              <strong>My Orders</strong> once it's ready.
+            </Alert>
+          )}
+          <FormInput
+            label="Quantity"
+            type="number"
+            min={1}
+            max={product.available_stock}
+            value={quantity}
+            onChange={(e) => setQuantity(Number(e.target.value))}
           />
-        )}
+          {product.requires_email && (
+            <FormInput
+              label="Email for delivery"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          )}
+          {activationLabel && (
+            <FormInput
+              label={activationLabel}
+              type="text"
+              value={activationInfo}
+              onChange={(e) => setActivationInfo(e.target.value)}
+              placeholder={activationLabel}
+              hint="We'll use this to activate your subscription after payment."
+            />
+          )}
+          <Alert variant="error">{error}</Alert>
+          <PrimaryButton onClick={reviewOrder} className="w-full">
+            Review order
+          </PrimaryButton>
+        </div>
+      )}
 
-        {step === "done" && manual && (
-          <div className="space-y-3 text-sm">
-            <p className="font-mono text-xs text-wire">Order #{order?.order_number}</p>
-            <p>
-              Payment confirmed. This product is delivered manually — estimated delivery{" "}
-              <strong>{product.delivery || "soon"}</strong>. Check{" "}
-              <Link href="/account/orders" className="underline">
-                My Orders
-              </Link>{" "}
-              once it's ready. If you need support, just quote your order number above.
-            </p>
-            <button onClick={onClose} className="w-full py-2 bg-ink text-paper">
-              Done
-            </button>
+      {step === "summary" && (
+        <div className="space-y-4 text-sm">
+          <div className="divide-y divide-border rounded-lg border border-border">
+            <Row label="Product" value={product.title} />
+            <Row label="Quantity" value={quantity} mono />
+            <Row label="Unit price" value={`$${Number(product.sell_price).toFixed(2)}`} mono />
+            {product.requires_email && <Row label="Delivery email" value={email} />}
+            {activationLabel && (
+              <Row label={activationLabel.replace(" (for activation)", "")} value={activationInfo} />
+            )}
+            {product.provider === "manual" && (
+              <Row label="Delivery" value={`Manual — ${product.delivery || "see details"}`} />
+            )}
+            <div className="flex justify-between px-3.5 py-3 text-base font-semibold text-ink">
+              <span>Total</span>
+              <span>${total}</span>
+            </div>
           </div>
-        )}
+          <Alert variant="error">{error}</Alert>
+          <div className="flex gap-3">
+            <SecondaryButton onClick={() => setStep("form")} className="flex-1">
+              Back
+            </SecondaryButton>
+            <PrimaryButton onClick={confirmOrder} disabled={creating} className="flex-1">
+              {creating ? "Creating…" : "Confirm & continue"}
+            </PrimaryButton>
+          </div>
+        </div>
+      )}
 
-        {step === "done" && !manual && (
-          <div className="space-y-3 text-sm">
-            <p className="font-mono text-xs text-wire">Order #{order?.order_number}</p>
-            <p>Delivered. Save these now:</p>
-            <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">
-              {(items || []).join("\n")}
-            </pre>
-            <button onClick={onClose} className="w-full py-2 bg-ink text-paper">
-              Done
-            </button>
-          </div>
-        )}
-      </div>
+      {step === "order" && order && (
+        <PaymentPanel
+          order={order}
+          onDone={(result) => {
+            setItems(result.items);
+            setManual(result.manual);
+            setStep("done");
+          }}
+        />
+      )}
+
+      {step === "done" && manual && (
+        <div className="space-y-3 text-sm">
+          <p className="font-mono text-xs text-muted">Order #{order?.order_number}</p>
+          <Alert variant="success">
+            Payment confirmed. This product is delivered manually — estimated delivery{" "}
+            <strong>{product.delivery || "soon"}</strong>. Check{" "}
+            <Link href="/account/orders" className="underline">
+              My Orders
+            </Link>{" "}
+            once it's ready. If you need support, just quote your order number above.
+          </Alert>
+          <PrimaryButton onClick={onClose} className="w-full">
+            Done
+          </PrimaryButton>
+        </div>
+      )}
+
+      {step === "done" && !manual && (
+        <div className="space-y-3 text-sm">
+          <p className="font-mono text-xs text-muted">Order #{order?.order_number}</p>
+          <p className="text-ink">Delivered. Save these now:</p>
+          <pre className="whitespace-pre-wrap break-all rounded-lg border border-border bg-brand-soft p-3 font-mono text-xs text-ink">
+            {(items || []).join("\n")}
+          </pre>
+          <PrimaryButton onClick={onClose} className="w-full">
+            Done
+          </PrimaryButton>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function Row({ label, value, mono }) {
+  return (
+    <div className="flex justify-between gap-3 px-3.5 py-3">
+      <span className="text-muted">{label}</span>
+      <span className={`text-right break-all text-ink ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
+
 function describeError(code, available) {
   switch (code) {
     case "not_enough_stock":
@@ -430,6 +399,6 @@ function describeError(code, available) {
     case "activation_info_required":
       return "Please enter the info needed to activate your subscription.";
     default:
-      return code ? code.replaceAll("_", " ") : "Something went wrong.";
+      return code ? code.replaceAll("_", " ") : "";
   }
 }

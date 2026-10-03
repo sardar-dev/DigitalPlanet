@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import SEO from "../../components/SEO";
-import { SITE_NAME } from "../../lib/siteConfig";
+import SiteHeader from "../../components/layout/SiteHeader";
+import SiteFooter from "../../components/layout/SiteFooter";
+import PageContainer from "../../components/layout/PageContainer";
+import Alert from "../../components/ui/Alert";
+import { FormInput } from "../../components/ui/FormInput";
+import { PrimaryButton, SecondaryButton } from "../../components/ui/Button";
+import { EmptyState } from "../../components/ui/States";
 
 export default function Wallet() {
+  const [session, setSession] = useState(null);
   const [balance, setBalance] = useState(null);
   const [payoutWallet, setPayoutWallet] = useState("");
   const [txHash, setTxHash] = useState("");
@@ -25,6 +31,7 @@ export default function Wallet() {
       window.location.href = "/login";
       return;
     }
+    setSession(session);
     const { data } = await supabase
       .from("profiles")
       .select("balance")
@@ -56,13 +63,13 @@ export default function Wallet() {
       ...(topups || []).map((t) => ({
         id: `topup-${t.id}`,
         date: t.created_at,
-        label: "Top-up",
+        label: "Top-up credit",
         amount: Number(t.amount),
       })),
       ...(adjustments || []).map((a) => ({
         id: `adj-${a.id}`,
         date: a.created_at,
-        label: `Adjustment — ${a.reason}`,
+        label: `Admin adjustment — ${a.reason}`,
         amount: Number(a.amount),
       })),
       ...(spentOrders || []).map((o) => ({
@@ -107,92 +114,86 @@ export default function Wallet() {
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body">
+    <div className="flex min-h-screen flex-col bg-bg font-body text-ink">
       <SEO title="Wallet" path="/account/wallet" noindex />
-      <header className="border-b border-line">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-2">
-          <Link href="/" className="font-display text-2xl">
-            {SITE_NAME}
-          </Link>
-          <nav className="text-sm space-x-5">
-            <Link href="/account/orders" className="hover:underline">
-              My orders
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader session={session} balance={balance} onSignOut={() => supabase.auth.signOut()} />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-        <div>
-          <div className="text-sm text-wire">Wallet balance</div>
-          <div className="font-display text-3xl">
-            {balance === null ? "…" : `$${balance.toFixed(2)}`}
-          </div>
-        </div>
-
-        <div className="space-y-4 max-w-md">
-          <h2 className="font-display text-lg">Top up</h2>
-          <p className="text-sm text-wire">
-            Send any amount of USDT on the <strong>BEP20 (BNB Smart Chain)</strong> network,
-            then paste the transaction hash below — it's added to your balance
-            once confirmed on-chain.
-          </p>
-          {payoutWallet && (
-            <div className="space-y-2">
-              <p className="font-mono text-xs break-all bg-white border border-line p-3">
-                {payoutWallet}
-              </p>
-              <button onClick={copyAddress} className="text-xs underline">
-                {copied ? "Copied!" : "Copy address"}
-              </button>
+      <main className="flex-1">
+        <PageContainer className="space-y-8 py-10" width="max-w-3xl">
+          <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
+            <div className="text-sm text-muted">Wallet balance</div>
+            <div className="mt-1 text-3xl font-semibold text-ink">
+              {balance === null ? "…" : `$${balance.toFixed(2)}`}
             </div>
-          )}
-          <label className="block text-sm">
-            Transaction hash
-            <input
-              value={txHash}
-              onChange={(e) => setTxHash(e.target.value)}
-              placeholder="0x…"
-              className="w-full mt-1 border border-line px-3 py-2 bg-paper font-mono text-xs"
-            />
-          </label>
-          {message && (
-            <p className={status === "error" ? "text-sm text-signal" : "text-sm text-wire"}>
-              {message}
-            </p>
-          )}
-          <button
-            onClick={submitTopup}
-            disabled={!txHash || status === "verifying"}
-            className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-          >
-            {status === "verifying" ? "Checking…" : "Verify & credit"}
-          </button>
-        </div>
+          </div>
 
-        <div>
-          <h2 className="font-display text-lg mb-3">History</h2>
-          {ledger.length === 0 && (
-            <p className="text-sm text-wire">Nothing yet.</p>
-          )}
-          <ul className="divide-y divide-line border-t border-b border-line text-sm">
-            {ledger.map((entry) => (
-              <li key={entry.id} className="py-3 flex justify-between gap-3">
-                <div>
-                  <div>{entry.label}</div>
-                  <div className="text-xs text-wire">
-                    {new Date(entry.date).toLocaleString()}
+          <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
+            <h2 className="text-lg font-semibold text-ink">Top up</h2>
+            <p className="mt-1 text-sm text-muted">
+              Send any amount of USDT on the{" "}
+              <span className="font-medium text-ink">BEP20 (BNB Smart Chain)</span> network, then
+              paste the transaction hash below — it's added to your balance once confirmed
+              on-chain.
+            </p>
+
+            {payoutWallet && (
+              <div className="mt-4 flex items-start gap-3">
+                <p className="flex-1 break-all rounded-lg border border-border bg-brand-soft p-3 font-mono text-xs text-ink">
+                  {payoutWallet}
+                </p>
+                <SecondaryButton onClick={copyAddress} className="px-3 py-1.5 text-xs">
+                  {copied ? "Copied!" : "Copy address"}
+                </SecondaryButton>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3 max-w-md">
+              <FormInput
+                label="Transaction hash"
+                value={txHash}
+                onChange={(e) => setTxHash(e.target.value)}
+                placeholder="0x…"
+                className="font-mono text-xs"
+              />
+              <Alert variant={status === "error" ? "error" : "success"}>{message}</Alert>
+              <PrimaryButton
+                onClick={submitTopup}
+                disabled={!txHash || status === "verifying"}
+                className="w-full"
+              >
+                {status === "verifying" ? "Checking…" : "Verify & credit"}
+              </PrimaryButton>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-semibold text-ink">History</h2>
+            {ledger.length === 0 && <EmptyState title="Nothing yet" />}
+            <ul className="divide-y divide-border rounded-xl border border-border bg-surface shadow-card">
+              {ledger.map((entry) => (
+                <li key={entry.id} className="flex justify-between gap-3 px-5 py-3 text-sm">
+                  <div>
+                    <div className="text-ink">{entry.label}</div>
+                    <div className="text-xs text-muted">
+                      {new Date(entry.date).toLocaleString()}
+                    </div>
                   </div>
-                </div>
-                <span className={`font-mono ${entry.amount < 0 ? "text-signal" : ""}`}>
-                  {entry.amount >= 0 ? "+" : ""}
-                  {entry.amount.toFixed(2)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+                  <span
+                    className={`font-mono font-medium ${
+                      entry.amount < 0 ? "text-danger" : "text-success"
+                    }`}
+                  >
+                    {entry.amount >= 0 ? "+" : ""}
+                    {entry.amount.toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </PageContainer>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
@@ -212,6 +213,6 @@ function describeError(code) {
     case "tx_already_used":
       return "That transaction hash was already used.";
     default:
-      return code ? code.replaceAll("_", " ") : "Something went wrong.";
+      return code ? code.replaceAll("_", " ") : "";
   }
 }

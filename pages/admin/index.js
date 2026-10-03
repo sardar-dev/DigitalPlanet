@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import SEO from "../../components/SEO";
+import AdminLayout from "../../components/admin/AdminLayout";
+import DashboardTab from "../../components/admin/DashboardTab";
+import ProductsTab from "../../components/admin/ProductsTab";
+import ManualProductsTab from "../../components/admin/ManualProductsTab";
+import OrdersTab from "../../components/admin/OrdersTab";
+import DebugTab from "../../components/admin/DebugTab";
+import SettingsTab from "../../components/admin/SettingsTab";
+import ManualDeliverModal from "../../components/admin/ManualDeliverModal";
+import ReconcileModal from "../../components/admin/ReconcileModal";
+import { LoadingState } from "../../components/ui/States";
 
 export default function Admin() {
   const [checking, setChecking] = useState(true);
@@ -23,11 +32,15 @@ export default function Admin() {
 
   // DigiTrust reconciliation
   const [digitrustOrders, setDigitrustOrders] = useState(null);
+  const [reconcileOrder, setReconcileOrder] = useState(null);
 
   // Manual products
   const [manualProducts, setManualProducts] = useState([]);
   const [manualForm, setManualForm] = useState(emptyManualForm());
   const [manualMessage, setManualMessage] = useState("");
+
+  // Manual delivery modal (replaces the old prompt())
+  const [deliverOrder, setDeliverOrder] = useState(null);
 
   // Site settings
   const [whatsappLink, setWhatsappLink] = useState("");
@@ -116,7 +129,7 @@ export default function Admin() {
   }
 
   async function archiveManualProduct(id) {
-    if (!confirm("Archive this product? It will stop showing on the storefront (existing orders are kept).")) return;
+    if (!confirm("Archive this product? It will stop showing on the storefront (existing orders are kept.)")) return;
     await fetch("/api/admin/manual-products", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -125,20 +138,9 @@ export default function Admin() {
     loadManualProducts();
   }
 
-  async function deliverManualOrder(order) {
-    const hint = order.activation_info ? ` (activation: ${order.activation_info})` : "";
-    const items = prompt(
-      `Paste the delivered item(s)/instructions, one per line${hint}:`
-    );
-    if (!items) return;
-    const res = await fetch("/api/admin/manual-deliver", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: order.id, items }),
-    });
-    const data = await res.json();
-    if (!data.success) alert(`Failed: ${data.error}`);
+  async function deliverManualOrder() {
     loadOrders();
+    setDeliverOrder(null);
   }
 
   // Debug tool state
@@ -302,562 +304,120 @@ export default function Admin() {
     [orders]
   );
 
-  if (checking) return <p className="p-8 text-sm">Checking access…</p>;
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <LoadingState label="Checking access…" />
+      </div>
+    );
+  }
   if (!allowed)
-    return <p className="p-8 text-sm">This account doesn't have admin access.</p>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg px-6">
+        <p className="text-sm text-muted">This account doesn't have admin access.</p>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body">
-      <SEO title="Admin" path="/admin" noindex />
-      <header className="border-b border-line">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-display text-2xl">DigiVerse 🌌 — Admin</span>
-          <nav className="text-sm space-x-4 sm:space-x-5">
-            <button
-              onClick={() => setTab("dashboard")}
-              className={tab === "dashboard" ? "underline" : ""}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setTab("products")}
-              className={tab === "products" ? "underline" : ""}
-            >
-              Products
-            </button>
-            <button
-              onClick={() => setTab("manual")}
-              className={tab === "manual" ? "underline" : ""}
-            >
-              Manual Products
-            </button>
-            <button
-              onClick={() => setTab("orders")}
-              className={tab === "orders" ? "underline" : ""}
-            >
-              Orders
-              {pendingManualCount > 0 && (
-                <span className="ml-1 text-signal">({pendingManualCount})</span>
-              )}
-            </button>
-            <button
-              onClick={() => setTab("debug")}
-              className={tab === "debug" ? "underline" : ""}
-            >
-              Debug payment
-            </button>
-            <button
-              onClick={() => setTab("settings")}
-              className={tab === "settings" ? "underline" : ""}
-            >
-              Settings
-            </button>
-          </nav>
-        </div>
-        {dashboard && (
-          <div
-            className={`px-4 sm:px-6 py-2 text-xs font-mono flex flex-wrap gap-4 ${
-              dashboard.digitrust.low ? "bg-signal/10 text-signal" : "bg-white text-wire"
-            }`}
-          >
-            <span>
-              DigiTrust balance:{" "}
-              {dashboard.digitrust.error
-                ? "unavailable"
-                : `$${Number(dashboard.digitrust.balance).toFixed(2)}`}
-              {dashboard.digitrust.low && " — LOW, top up soon"}
-            </span>
-            <span>
-              Last sync:{" "}
-              {dashboard.lastSync ? new Date(dashboard.lastSync).toLocaleString() : "never"}
-            </span>
-          </div>
-        )}
-      </header>
+    <AdminLayout
+      tab={tab}
+      onTabChange={setTab}
+      dashboard={dashboard}
+      pendingManualCount={pendingManualCount}
+    >
+      {tab === "dashboard" && (
+        <DashboardTab
+          dashboard={dashboard}
+          syncing={syncing}
+          syncMessage={syncMessage}
+          runManualSync={runManualSync}
+          adjEmail={adjEmail}
+          setAdjEmail={setAdjEmail}
+          adjAmount={adjAmount}
+          setAdjAmount={setAdjAmount}
+          adjReason={adjReason}
+          setAdjReason={setAdjReason}
+          adjMessage={adjMessage}
+          submitAdjustment={submitAdjustment}
+        />
+      )}
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-        {tab === "dashboard" && (
-          <div className="space-y-10 max-w-2xl">
-            <div>
-              <h2 className="font-display text-lg mb-3">Sync</h2>
-              <button
-                onClick={runManualSync}
-                disabled={syncing}
-                className="px-4 py-2 bg-ink text-paper text-sm disabled:opacity-40"
-              >
-                {syncing ? "Syncing…" : "Sync products now"}
-              </button>
-              {syncMessage && <p className="text-sm text-wire mt-2">{syncMessage}</p>}
-            </div>
+      {tab === "products" && (
+        <ProductsTab
+          productSearch={productSearch}
+          setProductSearch={setProductSearch}
+          sortAvailableFirst={sortAvailableFirst}
+          setSortAvailableFirst={setSortAvailableFirst}
+          visibleProducts={visibleProducts}
+          updateProduct={updateProduct}
+        />
+      )}
 
-            {dashboard && (
-              <div>
-                <h2 className="font-display text-lg mb-3">Sales</h2>
-                <dl className="text-sm grid grid-cols-2 gap-y-2 max-w-xs">
-                  <dt className="text-wire">Orders delivered</dt>
-                  <dd className="font-mono">{dashboard.sales.ordersDelivered}</dd>
-                  <dt className="text-wire">Total sales</dt>
-                  <dd className="font-mono">${dashboard.sales.totalSales.toFixed(2)}</dd>
-                  <dt className="text-wire">Est. DigiTrust cost</dt>
-                  <dd className="font-mono">${dashboard.sales.totalCost.toFixed(2)}</dd>
-                  <dt className="text-wire">Est. profit</dt>
-                  <dd className="font-mono">${dashboard.sales.profit.toFixed(2)}</dd>
-                </dl>
-                <p className="text-xs text-wire mt-2">
-                  Cost is estimated from each product's current DigiTrust price, not
-                  the historical price at time of sale.
-                </p>
-              </div>
-            )}
+      {tab === "manual" && (
+        <ManualProductsTab
+          manualForm={manualForm}
+          setManualForm={setManualForm}
+          saveManualProduct={saveManualProduct}
+          manualMessage={manualMessage}
+          manualProducts={manualProducts}
+          editManualProduct={editManualProduct}
+          archiveManualProduct={archiveManualProduct}
+          resetManualForm={() => setManualForm(emptyManualForm())}
+        />
+      )}
 
-            <div>
-              <h2 className="font-display text-lg mb-3">Manual wallet credit / debit</h2>
-              <div className="space-y-3 max-w-sm text-sm">
-                <input
-                  value={adjEmail}
-                  onChange={(e) => setAdjEmail(e.target.value)}
-                  placeholder="Customer email"
-                  className="w-full border border-line px-3 py-2 bg-paper"
-                />
-                <input
-                  value={adjAmount}
-                  onChange={(e) => setAdjAmount(e.target.value)}
-                  type="number"
-                  step="0.01"
-                  placeholder="Amount (negative to debit)"
-                  className="w-full border border-line px-3 py-2 bg-paper font-mono"
-                />
-                <input
-                  value={adjReason}
-                  onChange={(e) => setAdjReason(e.target.value)}
-                  placeholder="Reason (required)"
-                  className="w-full border border-line px-3 py-2 bg-paper"
-                />
-                <button
-                  onClick={submitAdjustment}
-                  disabled={!adjEmail || !adjAmount || !adjReason}
-                  className="px-4 py-2 bg-ink text-paper text-sm disabled:opacity-40"
-                >
-                  Apply
-                </button>
-                {adjMessage && <p className="text-wire">{adjMessage}</p>}
-              </div>
-            </div>
-          </div>
-        )}
+      {tab === "orders" && (
+        <OrdersTab
+          orderSearch={orderSearch}
+          setOrderSearch={setOrderSearch}
+          digitrustOrders={digitrustOrders}
+          setDigitrustOrders={setDigitrustOrders}
+          visibleOrders={visibleOrders}
+          setOrderStatus={setOrderStatus}
+          deleteOrder={deleteOrder}
+          onDeliverManual={(order) => setDeliverOrder(order)}
+          onCheckDigitrust={loadDigitrustOrders}
+          onReconcileDelivered={(order) => setReconcileOrder(order)}
+        />
+      )}
 
-        {tab === "products" && (
-          <>
-            <div className="flex flex-wrap gap-3 justify-between mb-3">
-              <input
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Search products…"
-                className="border border-line px-3 py-1.5 bg-paper text-sm flex-1 min-w-[180px]"
-              />
-              <button
-                onClick={() => setSortAvailableFirst((s) => !s)}
-                className="text-sm px-3 py-1.5 border border-line hover:bg-white whitespace-nowrap"
-              >
-                {sortAvailableFirst ? "Sorted: in-stock first ✓" : "Sort: in-stock first"}
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-t border-line min-w-[640px]">
-                <thead>
-                  <tr className="text-left text-wire border-b border-line">
-                    <th className="py-2 pr-2">Product</th>
-                    <th className="py-2 pr-2">Real stock</th>
-                    <th className="py-2 pr-2">Shown as</th>
-                    <th className="py-2 pr-2">DigiTrust price</th>
-                    <th className="py-2 pr-2">Your price</th>
-                    <th className="py-2 pr-2">Show on site</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleProducts.map((p) => (
-                    <tr
-                      key={p.id}
-                      className={`border-b border-line ${
-                        p.available_stock === 0 ? "opacity-50" : ""
-                      }`}
-                    >
-                      <td className="py-2 pr-2">{p.title}</td>
-                      <td className="py-2 pr-2 font-mono">{p.real_stock}</td>
-                      <td className="py-2 pr-2 font-mono">{p.available_stock}</td>
-                      <td className="py-2 pr-2 font-mono text-wire">
-                        ${Number(p.cost_price).toFixed(2)}
-                      </td>
-                      <td className="py-2 pr-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={p.sell_price}
-                          onBlur={(e) =>
-                            updateProduct(p.id, { sell_price: Number(e.target.value) })
-                          }
-                          className="w-24 border border-line px-2 py-1 font-mono"
-                        />
-                      </td>
-                      <td className="py-2 pr-2">
-                        <input
-                          type="checkbox"
-                          checked={p.selected}
-                          onChange={(e) =>
-                            updateProduct(p.id, { selected: e.target.checked })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+      {tab === "debug" && (
+        <DebugTab
+          debugTx={debugTx}
+          setDebugTx={setDebugTx}
+          runDebug={runDebug}
+          debugLoading={debugLoading}
+          debugResult={debugResult}
+        />
+      )}
 
-        {tab === "manual" && (
-          <div className="space-y-8 max-w-2xl">
-            <div>
-              <h2 className="font-display text-lg mb-3">
-                {manualForm.id !== null ? "Edit product" : "Add a manual product"}
-              </h2>
-              <div className="space-y-3 text-sm">
-                <input
-                  value={manualForm.title}
-                  onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
-                  placeholder="Title"
-                  className="w-full border border-line px-3 py-2 bg-paper"
-                />
-                <textarea
-                  value={manualForm.description}
-                  onChange={(e) =>
-                    setManualForm({ ...manualForm, description: e.target.value })
-                  }
-                  placeholder="Description (optional)"
-                  className="w-full border border-line px-3 py-2 bg-paper"
-                  rows={2}
-                />
-                <div className="flex gap-3">
-                  <input
-                    value={manualForm.sell_price}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, sell_price: e.target.value })
-                    }
-                    type="number"
-                    step="0.01"
-                    placeholder="Sell price"
-                    className="flex-1 border border-line px-3 py-2 bg-paper font-mono"
-                  />
-                  <input
-                    value={manualForm.cost_price}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, cost_price: e.target.value })
-                    }
-                    type="number"
-                    step="0.01"
-                    placeholder="Your cost (admin-only)"
-                    className="flex-1 border border-line px-3 py-2 bg-paper font-mono"
-                  />
-                  <input
-                    value={manualForm.available_stock}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, available_stock: e.target.value })
-                    }
-                    type="number"
-                    step="1"
-                    placeholder="Stock"
-                    className="w-28 border border-line px-3 py-2 bg-paper font-mono"
-                  />
-                </div>
-                <input
-                  value={manualForm.delivery}
-                  onChange={(e) => setManualForm({ ...manualForm, delivery: e.target.value })}
-                  placeholder='Estimated delivery, e.g. "Within 1-6 hours"'
-                  className="w-full border border-line px-3 py-2 bg-paper"
-                />
-                <label className="block text-sm">
-                  Activation info needed from customer
-                  <select
-                    value={manualForm.activation_field}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, activation_field: e.target.value })
-                    }
-                    className="w-full mt-1 border border-line px-3 py-2 bg-paper"
-                  >
-                    <option value="">None</option>
-                    <option value="email">Email</option>
-                    <option value="username">Username</option>
-                  </select>
-                  <span className="block text-xs text-wire mt-1">
-                    Shown to the customer as the box's label/placeholder at checkout, so
-                    they know exactly what to provide for activation.
-                  </span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={manualForm.selected}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, selected: e.target.checked })
-                    }
-                  />
-                  Active (shown on storefront)
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={saveManualProduct}
-                    className="px-4 py-2 bg-ink text-paper text-sm"
-                  >
-                    {manualForm.id !== null ? "Save changes" : "Create product"}
-                  </button>
-                  {manualForm.id !== null && (
-                    <button
-                      onClick={() => setManualForm(emptyManualForm())}
-                      className="px-4 py-2 border border-line text-sm"
-                    >
-                      Cancel edit
-                    </button>
-                  )}
-                </div>
-                {manualMessage && <p className="text-wire">{manualMessage}</p>}
-              </div>
-            </div>
+      {tab === "settings" && (
+        <SettingsTab
+          whatsappLink={whatsappLink}
+          setWhatsappLink={setWhatsappLink}
+          saveSettings={saveSettings}
+          settingsMessage={settingsMessage}
+        />
+      )}
 
-            <div>
-              <h2 className="font-display text-lg mb-3">Your manual products</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-t border-line min-w-[640px]">
-                  <thead>
-                    <tr className="text-left text-wire border-b border-line">
-                      <th className="py-2 pr-2">Title</th>
-                      <th className="py-2 pr-2">Stock</th>
-                      <th className="py-2 pr-2">Sell price</th>
-                      <th className="py-2 pr-2">Cost</th>
-                      <th className="py-2 pr-2">Activation</th>
-                      <th className="py-2 pr-2">Active</th>
-                      <th className="py-2 pr-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualProducts.map((p) => (
-                      <tr key={p.id} className="border-b border-line">
-                        <td className="py-2 pr-2">{p.title}</td>
-                        <td className="py-2 pr-2 font-mono">{p.available_stock}</td>
-                        <td className="py-2 pr-2 font-mono">${Number(p.sell_price).toFixed(2)}</td>
-                        <td className="py-2 pr-2 font-mono text-wire">
-                          ${Number(p.cost_price).toFixed(2)}
-                        </td>
-                        <td className="py-2 pr-2">{p.activation_field || "—"}</td>
-                        <td className="py-2 pr-2">{p.selected ? "Yes" : "No"}</td>
-                        <td className="py-2 pr-2 space-x-2 whitespace-nowrap">
-                          <button onClick={() => editManualProduct(p)} className="underline">
-                            Edit
-                          </button>
-                          {p.selected && (
-                            <button
-                              onClick={() => archiveManualProduct(p.id)}
-                              className="underline text-signal"
-                            >
-                              Archive
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+      {deliverOrder && (
+        <ManualDeliverModal
+          order={deliverOrder}
+          onClose={() => setDeliverOrder(null)}
+          onDelivered={deliverManualOrder}
+        />
+      )}
 
-        {tab === "orders" && (
-          <>
-            <input
-              value={orderSearch}
-              onChange={(e) => setOrderSearch(e.target.value)}
-              placeholder="Search by product, status, or tx hash…"
-              className="border border-line px-3 py-1.5 bg-paper text-sm w-full mb-3"
-            />
-            {digitrustOrders && (
-              <div className="mb-4 border border-line bg-white p-3">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-display">DigiTrust's recent orders</span>
-                  <button
-                    onClick={() => setDigitrustOrders(null)}
-                    className="text-xs underline text-wire"
-                  >
-                    Close
-                  </button>
-                </div>
-                <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                  {JSON.stringify(digitrustOrders, null, 2)}
-                </pre>
-              </div>
-            )}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-t border-line min-w-[720px]">
-                <thead>
-                  <tr className="text-left text-wire border-b border-line">
-                    <th className="py-2 pr-2">Order #</th>
-                    <th className="py-2 pr-2">Product</th>
-                    <th className="py-2 pr-2">Total</th>
-                    <th className="py-2 pr-2">Paid with</th>
-                    <th className="py-2 pr-2">Status</th>
-                    <th className="py-2 pr-2">Activation info</th>
-                    <th className="py-2 pr-2">Tx hash</th>
-                    <th className="py-2 pr-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleOrders.map((o) => (
-                    <tr key={o.id} className="border-b border-line align-top">
-                      <td className="py-2 pr-2 font-mono">{o.order_number}</td>
-                      <td className="py-2 pr-2">{o.products?.title}</td>
-                      <td className="py-2 pr-2 font-mono">${Number(o.total).toFixed(2)}</td>
-                      <td className="py-2 pr-2">{o.paid_with || "onchain"}</td>
-                      <td className="py-2 pr-2">{o.status}</td>
-                      <td className="py-2 pr-2 break-all max-w-[140px]">
-                        {o.activation_info || "—"}
-                      </td>
-                      <td className="py-2 pr-2 font-mono text-xs break-all max-w-[160px]">
-                        {o.tx_hash || "—"}
-                      </td>
-                      <td className="py-2 pr-2 space-x-2 whitespace-nowrap">
-                        {o.status === "pending_payment" && (
-                          <button
-                            onClick={() => setOrderStatus(o.id, "cancelled")}
-                            className="underline"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                        {o.status === "awaiting_manual_fulfillment" && (
-                          <button
-                            onClick={() => deliverManualOrder(o)}
-                            className="underline"
-                          >
-                            Deliver
-                          </button>
-                        )}
-                        {o.status === "failed" && (
-                          <button
-                            onClick={() => setOrderStatus(o.id, "refunded")}
-                            className="underline"
-                          >
-                            Mark refunded
-                          </button>
-                        )}
-                        {o.status === "needs_reconciliation" && (
-                          <>
-                            <button
-                              onClick={loadDigitrustOrders}
-                              className="underline"
-                            >
-                              Check DigiTrust
-                            </button>
-                            <button
-                              onClick={() => {
-                                const items = prompt(
-                                  "Paste delivered items, one per line (from DigiTrust's order history):"
-                                );
-                                if (items) {
-                                  fetch("/api/admin/orders", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({
-                                      id: o.id,
-                                      status: "delivered",
-                                      items,
-                                    }),
-                                  }).then(loadOrders);
-                                }
-                              }}
-                              className="underline"
-                            >
-                              Mark delivered
-                            </button>
-                            <button
-                              onClick={() => setOrderStatus(o.id, "failed")}
-                              className="underline text-signal"
-                            >
-                              Mark failed
-                            </button>
-                          </>
-                        )}
-                        {["pending_payment", "payment_submitted", "failed", "cancelled"].includes(
-                          o.status
-                        ) && (
-                          <button
-                            onClick={() => deleteOrder(o.id)}
-                            className="underline text-signal"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {tab === "debug" && (
-          <div className="max-w-md space-y-4">
-            <p className="text-sm text-wire">
-              Paste any transaction hash to see exactly what the on-chain
-              lookup returns — useful when payment verification isn't
-              behaving as expected.
-            </p>
-            <input
-              value={debugTx}
-              onChange={(e) => setDebugTx(e.target.value)}
-              placeholder="0x…"
-              className="w-full border border-line px-3 py-2 bg-paper font-mono text-xs"
-            />
-            <button
-              onClick={runDebug}
-              disabled={!debugTx || debugLoading}
-              className="px-4 py-2 bg-ink text-paper text-sm disabled:opacity-40"
-            >
-              {debugLoading ? "Checking…" : "Run lookup"}
-            </button>
-            {debugResult && (
-              <pre className="bg-white border border-line p-3 text-xs whitespace-pre-wrap overflow-x-auto">
-                {JSON.stringify(debugResult, null, 2)}
-              </pre>
-            )}
-          </div>
-        )}
-        {tab === "settings" && (
-          <div className="max-w-md space-y-4">
-            <h2 className="font-display text-lg">Site settings</h2>
-            <label className="block text-sm">
-              WhatsApp channel link
-              <input
-                value={whatsappLink}
-                onChange={(e) => setWhatsappLink(e.target.value)}
-                placeholder="https://chat.whatsapp.com/…"
-                className="w-full mt-1 border border-line px-3 py-2 bg-paper text-sm"
-              />
-            </label>
-            <p className="text-xs text-wire">
-              Shown as a floating button on the storefront and customer pages once
-              set. Leave empty to hide the button.
-            </p>
-            <button
-              onClick={saveSettings}
-              className="px-4 py-2 bg-ink text-paper text-sm"
-            >
-              Save
-            </button>
-            {settingsMessage && <p className="text-sm text-wire">{settingsMessage}</p>}
-          </div>
-        )}
-      </main>
-    </div>
+      {reconcileOrder && (
+        <ReconcileModal
+          order={reconcileOrder}
+          onClose={() => setReconcileOrder(null)}
+          onResolved={() => {
+            setReconcileOrder(null);
+            loadOrders();
+          }}
+        />
+      )}
+    </AdminLayout>
   );
 }

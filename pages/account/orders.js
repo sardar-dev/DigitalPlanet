@@ -1,24 +1,16 @@
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import PaymentPanel from "../../components/PaymentPanel";
 import SEO from "../../components/SEO";
-import { SITE_NAME } from "../../lib/siteConfig";
-
-const STATUS_LABEL = {
-  pending_payment: "Waiting for payment",
-  payment_submitted: "Verifying payment",
-  paid: "Paid — fulfilling",
-  fulfilling: "Fulfilling",
-  awaiting_manual_fulfillment: "Awaiting manual delivery",
-  delivered: "Delivered",
-  failed: "Failed — refund pending",
-  refunded: "Refunded",
-  cancelled: "Cancelled",
-  needs_reconciliation: "Confirming delivery — hang tight",
-};
+import SiteHeader from "../../components/layout/SiteHeader";
+import SiteFooter from "../../components/layout/SiteFooter";
+import PageContainer from "../../components/layout/PageContainer";
+import StatusBadge from "../../components/ui/StatusBadge";
+import { EmptyState, LoadingState } from "../../components/ui/States";
+import { PrimaryButton, SecondaryButton, LinkButton } from "../../components/ui/Button";
 
 export default function Orders() {
+  const [session, setSession] = useState(null);
   const [orders, setOrders] = useState(null);
   const [resuming, setResuming] = useState(null); // order id being resumed
 
@@ -34,6 +26,7 @@ export default function Orders() {
       window.location.href = "/login";
       return;
     }
+    setSession(session);
     const { data } = await supabase
       .from("orders")
       .select("*, products(title, provider, delivery)")
@@ -51,96 +44,92 @@ export default function Orders() {
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body">
+    <div className="flex min-h-screen flex-col bg-bg font-body text-ink">
       <SEO title="My orders" path="/account/orders" noindex />
-      <header className="border-b border-line">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-baseline justify-between gap-2">
-          <Link href="/" className="font-display text-2xl">
-            {SITE_NAME}
-          </Link>
-          <nav className="text-sm space-x-5">
-            <Link href="/account/wallet" className="hover:underline">
-              Wallet
-            </Link>
-            <span>My orders</span>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader session={session} onSignOut={() => supabase.auth.signOut()} />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-        <p className="text-xs text-wire mb-4">
-          Need help with an order? Just quote its order number to support.
-        </p>
-        {!orders && <p className="text-sm">Loading…</p>}
-        {orders && orders.length === 0 && (
-          <p className="text-sm text-wire">No orders yet.</p>
-        )}
-        <ul className="divide-y divide-line border-t border-b border-line">
-          {(orders || []).map((o) => (
-            <li key={o.id} className="py-4">
-              <div className="flex flex-wrap justify-between gap-2 text-sm">
-                <span className="font-display text-base">
-                  {o.products?.title || `Product #${o.product_id}`} × {o.quantity}
-                </span>
-                <span className="font-mono">${Number(o.total).toFixed(2)}</span>
-              </div>
-              <div className="text-xs font-mono text-wire mt-0.5">
-                Order #{o.order_number}
-              </div>
-              <div className="text-xs text-wire mt-1">
-                {STATUS_LABEL[o.status] || o.status} ·{" "}
-                {new Date(o.created_at).toLocaleString()}
-              </div>
-              {o.status === "awaiting_manual_fulfillment" && o.products?.delivery && (
-                <div className="text-xs text-wire mt-1">
-                  Estimated delivery: {o.products.delivery}
+      <main className="flex-1">
+        <PageContainer className="py-10" width="max-w-3xl">
+          <h1 className="text-2xl font-semibold text-ink">My orders</h1>
+          <p className="mt-1 mb-6 text-sm text-muted">
+            Need help with an order? Just quote its order number to support.
+          </p>
+
+          {!orders && <LoadingState label="Loading orders…" />}
+          {orders && orders.length === 0 && (
+            <EmptyState title="No orders yet" description="Items you buy will show up here." />
+          )}
+
+          <ul className="space-y-4">
+            {(orders || []).map((o) => (
+              <li
+                key={o.id}
+                className="rounded-xl border border-border bg-surface p-5 shadow-card"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-ink">
+                      {o.products?.title || `Product #${o.product_id}`} × {o.quantity}
+                    </div>
+                    <div className="mt-0.5 font-mono text-xs text-muted">
+                      Order #{o.order_number} · {new Date(o.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-ink">
+                      ${Number(o.total).toFixed(2)}
+                    </span>
+                    <StatusBadge status={o.status} />
+                  </div>
                 </div>
-              )}
 
-              {o.status === "pending_payment" && resuming !== o.id && (
-                <div className="flex gap-3 mt-2">
-                  <button
-                    onClick={() => setResuming(o.id)}
-                    className="text-xs underline"
-                  >
-                    Continue payment
-                  </button>
-                  <button
-                    onClick={() => cancelOrder(o.id)}
-                    className="text-xs underline text-signal"
-                  >
-                    Cancel order
-                  </button>
-                </div>
-              )}
+                {o.status === "awaiting_manual_fulfillment" && o.products?.delivery && (
+                  <p className="mt-2 text-xs text-muted">
+                    Estimated delivery: {o.products.delivery}
+                  </p>
+                )}
 
-              {o.status === "pending_payment" && resuming === o.id && (
-                <div className="mt-3 border border-line p-4 bg-white">
-                  <PaymentPanel
-                    order={o}
-                    onDone={() => {
-                      setResuming(null);
-                      load();
-                    }}
-                  />
-                  <button
-                    onClick={() => setResuming(null)}
-                    className="text-xs underline text-wire mt-3"
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
+                {o.status === "pending_payment" && resuming !== o.id && (
+                  <div className="mt-3 flex gap-3">
+                    <PrimaryButton onClick={() => setResuming(o.id)} className="px-3 py-1.5 text-xs">
+                      Continue payment
+                    </PrimaryButton>
+                    <LinkButton onClick={() => cancelOrder(o.id)} className="text-danger text-xs">
+                      Cancel order
+                    </LinkButton>
+                  </div>
+                )}
 
-              {o.status === "delivered" && o.items?.length > 0 && (
-                <pre className="mt-2 bg-white border border-line p-3 text-xs whitespace-pre-wrap font-mono break-all">
-                  {o.items.join("\n")}
-                </pre>
-              )}
-            </li>
-          ))}
-        </ul>
+                {o.status === "pending_payment" && resuming === o.id && (
+                  <div className="mt-4 rounded-lg border border-border bg-bg p-4">
+                    <PaymentPanel
+                      order={o}
+                      onDone={() => {
+                        setResuming(null);
+                        load();
+                      }}
+                    />
+                    <SecondaryButton
+                      onClick={() => setResuming(null)}
+                      className="mt-3 px-3 py-1.5 text-xs"
+                    >
+                      Close
+                    </SecondaryButton>
+                  </div>
+                )}
+
+                {o.status === "delivered" && o.items?.length > 0 && (
+                  <pre className="mt-3 whitespace-pre-wrap break-all rounded-lg border border-success/20 bg-success-soft p-3 font-mono text-xs text-ink">
+                    {o.items.join("\n")}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        </PageContainer>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

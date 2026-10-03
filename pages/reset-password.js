@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import SEO from "../components/SEO";
+import Alert from "../components/ui/Alert";
+import { FormInput } from "../components/ui/FormInput";
+import { PrimaryButton } from "../components/ui/Button";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -23,11 +26,11 @@ export default function ResetPassword() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-paper text-ink font-body flex items-center justify-center px-4 sm:px-6">
+      <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 font-body text-ink sm:px-6">
         <SEO title="Reset password" path="/reset-password" noindex />
-        <div className="max-w-sm text-center space-y-3">
-          <h1 className="font-display text-2xl">Password updated</h1>
-          <a href="/login" className="underline text-sm">
+        <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-7 text-center shadow-card">
+          <h1 className="text-2xl font-semibold text-ink">Password updated</h1>
+          <a href="/login" className="mt-4 inline-block text-sm font-medium text-brand hover:underline">
             Go to login
           </a>
         </div>
@@ -36,37 +39,40 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body flex items-center justify-center px-4 sm:px-6">
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 font-body text-ink sm:px-6">
       <SEO title="Reset password" path="/reset-password" noindex />
-      <form onSubmit={handleSubmit} className="max-w-sm w-full space-y-4">
-        <h1 className="font-display text-2xl mb-2">Set a new password</h1>
-        <label className="block text-sm">
-          New password
-          <div className="relative mt-1">
-            <input
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm rounded-xl border border-border bg-surface p-7 shadow-card"
+      >
+        <h1 className="mb-5 text-2xl font-semibold text-ink">Set a new password</h1>
+
+        <div className="space-y-4">
+          <div>
+            <FormInput
+              label="New password"
               type={showPassword ? "text" : "password"}
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-line px-3 py-2 pr-16 bg-paper"
+              hint="At least 6 characters."
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs underline text-wire"
+              className="mt-1.5 text-xs font-medium text-brand hover:underline"
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? "Hide password" : "Show password"}
             </button>
           </div>
-        </label>
-        {error && <p className="text-sm text-signal">{error}</p>}
-        <button
-          disabled={loading}
-          className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-        >
-          {loading ? "Saving…" : "Update password"}
-        </button>
+
+          <Alert variant="error">{error}</Alert>
+
+          <PrimaryButton disabled={loading} className="w-full">
+            {loading ? "Saving…" : "Update password"}
+          </PrimaryButton>
+        </div>
       </form>
     </div>
   );

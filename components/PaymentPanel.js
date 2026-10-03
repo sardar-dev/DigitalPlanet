@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { supabase } from "../lib/supabaseClient";
+import Alert from "./ui/Alert";
+import { PrimaryButton, SecondaryButton, LinkButton } from "./ui/Button";
+import { FormInput } from "./ui/FormInput";
 
 // Used both in the checkout modal (fresh order) and on /account/orders
 // (resuming a payment after a closed tab / refresh / lost connection).
@@ -83,21 +86,22 @@ export default function PaymentPanel({ order, onDone }) {
   if (!method) {
     return (
       <div className="space-y-3">
-        <p className="text-sm">Choose how to pay:</p>
+        <p className="text-sm font-medium text-ink">Choose how to pay</p>
         {canPayWithBalance && (
           <button
             onClick={() => setMethod("wallet")}
-            className="w-full py-2 border border-line hover:bg-white text-sm text-left px-3"
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm hover:border-brand hover:bg-brand-soft"
           >
-            Pay with wallet balance{" "}
-            <span className="font-mono">(${balance.toFixed(2)} available)</span>
+            <span className="font-medium text-ink">Wallet balance</span>
+            <span className="font-mono text-muted">${balance.toFixed(2)} available</span>
           </button>
         )}
         <button
           onClick={() => setMethod("onchain")}
-          className="w-full py-2 border border-line hover:bg-white text-sm text-left px-3"
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm hover:border-brand hover:bg-brand-soft"
         >
-          Deposit USDT (BEP20)
+          <span className="font-medium text-ink">USDT (BEP20) deposit</span>
+          <span className="text-muted">Pay on-chain</span>
         </button>
       </div>
     );
@@ -105,26 +109,32 @@ export default function PaymentPanel({ order, onDone }) {
 
   if (method === "wallet") {
     return (
-      <div className="space-y-3 text-sm">
-        <p>
-          Pay <span className="font-mono">${Number(order.total).toFixed(2)}</span> with your
-          wallet balance?
-        </p>
-        {error && <p className="text-signal">{error}</p>}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMethod(null)}
-            className="flex-1 py-2 border border-line text-sm"
-          >
+      <div className="space-y-4 text-sm">
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <div className="flex justify-between py-1">
+            <span className="text-muted">Available balance</span>
+            <span className="font-mono text-ink">${(balance ?? 0).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-muted">Order amount</span>
+            <span className="font-mono text-ink">${Number(order.total).toFixed(2)}</span>
+          </div>
+        </div>
+        {!canPayWithBalance && (
+          <Alert variant="warning">Insufficient wallet balance for this order.</Alert>
+        )}
+        <Alert variant="error">{error}</Alert>
+        <div className="flex gap-3">
+          <SecondaryButton onClick={() => setMethod(null)} className="flex-1">
             Back
-          </button>
-          <button
+          </SecondaryButton>
+          <PrimaryButton
             onClick={payWithBalance}
-            disabled={busy}
-            className="flex-1 py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
+            disabled={busy || !canPayWithBalance}
+            className="flex-1"
           >
             {busy ? "Processing…" : "Confirm"}
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     );
@@ -132,47 +142,58 @@ export default function PaymentPanel({ order, onDone }) {
 
   return (
     <div className="space-y-4 text-sm">
-      <button onClick={() => setMethod(null)} className="text-xs underline text-wire">
-        ← Back
-      </button>
-      <p>
-        Send exactly{" "}
-        <span className="font-mono text-base">${Number(order.total).toFixed(4)}</span> USDT on
-        the <strong>BEP20 (BNB Smart Chain)</strong> network to:
-      </p>
-      <div className="flex items-start gap-3">
-        {qrDataUrl && (
-          <img src={qrDataUrl} alt="Wallet address QR code" className="w-24 h-24 flex-shrink-0" />
-        )}
-        <div className="flex-1 space-y-2">
-          <p className="font-mono text-xs break-all bg-white border border-line p-3">
-            {order.payout_wallet}
-          </p>
-          <button onClick={copyAddress} className="text-xs underline">
-            {copied ? "Copied!" : "Copy address"}
-          </button>
+      <LinkButton onClick={() => setMethod(null)}>← Back</LinkButton>
+
+      <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-muted">Amount</span>
+          <span className="font-mono text-base text-ink">
+            ${Number(order.total).toFixed(4)} USDT
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted">Network</span>
+          <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
+            BEP20 (BNB Smart Chain)
+          </span>
         </div>
       </div>
-      <p className="text-wire">
+
+      <div className="flex items-start gap-3">
+        {qrDataUrl && (
+          <img
+            src={qrDataUrl}
+            alt="QR code for the payout wallet address"
+            className="h-24 w-24 flex-shrink-0 rounded-lg border border-border"
+          />
+        )}
+        <div className="flex-1 space-y-2">
+          <p className="break-all rounded-lg border border-border bg-brand-soft p-3 font-mono text-xs text-ink">
+            {order.payout_wallet}
+          </p>
+          <SecondaryButton onClick={copyAddress} className="px-3 py-1.5 text-xs">
+            {copied ? "Copied!" : "Copy address"}
+          </SecondaryButton>
+        </div>
+      </div>
+
+      <Alert variant="warning">
         Sending on any other network will lose the funds — double-check BEP20 before sending.
-      </p>
-      <label className="block">
-        Transaction hash
-        <input
-          value={txHash}
-          onChange={(e) => setTxHash(e.target.value)}
-          placeholder="0x…"
-          className="w-full mt-1 border border-line px-3 py-2 bg-paper font-mono text-xs"
-        />
-      </label>
-      {error && <p className="text-signal">{error}</p>}
-      <button
-        onClick={submitPayment}
-        disabled={!txHash || busy}
-        className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-      >
+      </Alert>
+
+      <FormInput
+        label="Transaction hash"
+        value={txHash}
+        onChange={(e) => setTxHash(e.target.value)}
+        placeholder="0x…"
+        className="font-mono text-xs"
+      />
+
+      <Alert variant="error">{error}</Alert>
+
+      <PrimaryButton onClick={submitPayment} disabled={!txHash || busy} className="w-full">
         {busy ? "Checking…" : "I've sent it — verify payment"}
-      </button>
+      </PrimaryButton>
     </div>
   );
 }
@@ -200,6 +221,6 @@ function describeError(code) {
     case "fulfillment_uncertain_pending_review":
       return "Payment received — we're double-checking delivery, this may take a few minutes.";
     default:
-      return code ? code.replaceAll("_", " ") : "Something went wrong.";
+      return code ? code.replaceAll("_", " ") : "";
   }
 }

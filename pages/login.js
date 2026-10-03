@@ -2,6 +2,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import SEO from "../components/SEO";
+import Alert from "../components/ui/Alert";
+import { FormInput } from "../components/ui/FormInput";
+import { PrimaryButton, LinkButton } from "../components/ui/Button";
 import { SITE_NAME } from "../lib/siteConfig";
 
 export default function Login() {
@@ -25,7 +28,7 @@ export default function Login() {
 
   async function forgotPassword() {
     if (!email) {
-      setError("Type your email above first, then tap \"Forgot password\".");
+      setError('Type your email above first, then tap "Forgot password".');
       return;
     }
     setError("");
@@ -42,7 +45,7 @@ export default function Login() {
 
   async function resendConfirmation() {
     if (!email) {
-      setError("Type your email above first, then tap \"Resend confirmation email\".");
+      setError('Type your email above first, then tap "Resend confirmation email".');
       return;
     }
     setError("");
@@ -53,64 +56,65 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-body flex items-center justify-center px-4 sm:px-6">
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 font-body text-ink sm:px-6">
       <SEO title="Log in" path="/login" noindex />
-      <form onSubmit={handleSubmit} className="max-w-sm w-full space-y-4">
-        <Link href="/" className="font-display text-lg block mb-2">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm rounded-xl border border-border bg-surface p-7 shadow-card"
+      >
+        <Link href="/" className="mb-1 block text-base font-semibold text-ink">
           {SITE_NAME}
         </Link>
-        <h1 className="font-display text-2xl mb-2">Log in</h1>
-        <label className="block text-sm">
-          Email
-          <input
+        <h1 className="mb-5 text-2xl font-semibold text-ink">Log in</h1>
+
+        <div className="space-y-4">
+          <FormInput
+            label="Email"
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full mt-1 border border-line px-3 py-2 bg-paper"
           />
-        </label>
-        <label className="block text-sm">
-          Password
-          <div className="relative mt-1">
-            <input
+          <div>
+            <FormInput
+              label="Password"
               type={showPassword ? "text" : "password"}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-line px-3 py-2 pr-16 bg-paper"
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs underline text-wire"
+              className="mt-1.5 text-xs font-medium text-brand hover:underline"
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? "Hide password" : "Show password"}
             </button>
           </div>
-        </label>
-        {error && <p className="text-sm text-signal">{error}</p>}
-        {notice && <p className="text-sm text-wire">{notice}</p>}
-        <button
-          disabled={loading}
-          className="w-full py-2 bg-ink text-paper hover:bg-wire transition-colors disabled:opacity-40"
-        >
-          {loading ? "Signing in…" : "Log in"}
-        </button>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-wire">
-          <button type="button" onClick={forgotPassword} className="underline">
-            Forgot password
-          </button>
-          <button type="button" onClick={resendConfirmation} className="underline">
-            Resend confirmation email
-          </button>
+
+          <Alert variant="error">{error}</Alert>
+          <Alert variant="success">{notice}</Alert>
+
+          <PrimaryButton disabled={loading} className="w-full">
+            {loading ? "Signing in…" : "Log in"}
+          </PrimaryButton>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <LinkButton onClick={forgotPassword} className="text-xs">
+              Forgot password
+            </LinkButton>
+            <LinkButton onClick={resendConfirmation} className="text-xs">
+              Resend confirmation email
+            </LinkButton>
+          </div>
+
+          <p className="text-sm text-muted">
+            No account?{" "}
+            <Link href="/signup" className="font-medium text-brand hover:underline">
+              Sign up
+            </Link>
+          </p>
         </div>
-        <p className="text-sm text-wire">
-          No account?{" "}
-          <Link href="/signup" className="underline">
-            Sign up
-          </Link>
-        </p>
       </form>
     </div>
   );

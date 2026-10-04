@@ -251,6 +251,44 @@ instead of the internal id.
 
 **Migration**: run `supabase/migration_007_manual_activation_and_order_number.sql`.
 
+## Unique-amount deposit invoices (wallet top-up)
+
+Previously, a wallet top-up credited whatever amount a submitted tx
+hash actually moved on-chain. Since the payout wallet address and all
+transactions to it are public on the blockchain, this meant anyone
+who spotted someone else's pending transfer could try to submit that
+hash first and claim it as their own top-up.
+
+Fix: `/account/wallet` now works as a two-step invoice flow:
+
+1. Customer enters a round amount they want to add (e.g. `$10`) and
+   requests a deposit invoice.
+2. The server generates a unique exact amount for that invoice (e.g.
+   `$10.0047`) — guaranteed to be the only *pending* invoice anywhere
+   claiming that exact figure, enforced by a partial unique index on
+   `wallet_deposit_invoices (unique_amount) where status = 'pending'`
+   — valid for 30 minutes.
+3. Customer sends exactly that amount and submits the tx hash.
+4. `/api/wallet/topup` only credits the transaction if its on-chain
+   amount matches *that invoice's* unique amount — not just any
+   transfer to our wallet. The round `$10` is what's credited to
+   their balance; the extra decimal places were only ever a matching
+   fingerprint.
+
+An attacker's own transaction can only ever match an invoice the
+attacker themselves created, so there's nothing to race anymore.
+Expired invoices aren't cleaned up by a cron — they're lazily marked
+`expired` whenever the owner next requests a new invoice, and an
+expired/matched invoice can never be topped-up against again (checked
+server-side on every `/api/wallet/topup` call).
+
+The wallet page also now shows a clear warning: **"Send only USDT on
+BEP20. Other tokens or networks will be lost."**
+
+**Migration**: run `supabase/migration_008_deposit_invoices.sql`.
+
+**New env vars**: none.
+
 ## WhatsApp channel button
 
 `/admin` → **Settings** tab — paste your WhatsApp channel/group

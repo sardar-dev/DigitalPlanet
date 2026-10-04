@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   }
 
   const requestedAmount = Number(req.body?.amount);
-  if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+  if (!Number.isFinite(requestedAmount) || requestedAmount < 0.1) {
     return res.status(400).json({ success: false, error: "invalid_amount" });
   }
   // Round to cents — the unique, unpredictable part lives entirely in
@@ -45,9 +45,13 @@ export default async function handler(req, res) {
   const expiresAt = new Date(Date.now() + INVOICE_TTL_MINUTES * 60 * 1000).toISOString();
 
   for (let attempt = 0; attempt < MAX_COLLISION_RETRIES; attempt++) {
-    // 4 decimal places of randomness (0.0001–0.9999) layered onto the
-    // round dollar amount. BEP20 USDT easily supports this precision.
-    const offset = Math.floor(Math.random() * 9999 + 1) / 10000;
+    // Fingerprint format: <base>.00XX, where XX is a random 2-digit
+    // number from 10-90. E.g. base 1 -> 1.0067, base 0.3 -> 0.3037.
+    // The leading zero keeps the fingerprint visually distinct from a
+    // "normal" amount (nobody sends .00XX by coincidence), while still
+    // giving ~81 possible values to avoid collisions.
+    const fingerprint = Math.floor(Math.random() * 81) + 10; // 10-90
+    const offset = fingerprint / 10000; // 0.0010 - 0.0090
     const uniqueAmount = Math.round((base + offset) * 10000) / 10000;
 
     const { data, error } = await supabaseAdmin

@@ -16,6 +16,7 @@ module.exports = {
         brand: "#3169F5",
         "brand-light": "#73A0FF",
         "brand-soft": "#EDF2FB",
+        "brand-dark": "#1E4FD6",
         success: "#15803D",
         "success-soft": "#ECFDF3",
         danger: "#DC2626",

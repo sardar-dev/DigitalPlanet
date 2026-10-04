@@ -195,16 +195,17 @@ export default function Wallet() {
                   <FormInput
                     label="Amount to add (USD)"
                     type="number"
-                    min="1"
-                    step="1"
+                    min="0.1"
+                    step="0.1"
                     value={requestAmount}
                     onChange={(e) => setRequestAmount(e.target.value)}
                     placeholder="e.g. 10"
+                    hint="Minimum $0.10."
                   />
                   <Alert variant="error">{status !== "requesting" ? message : ""}</Alert>
                   <PrimaryButton
                     onClick={requestInvoice}
-                    disabled={!requestAmount || Number(requestAmount) <= 0 || status === "requesting"}
+                    disabled={!requestAmount || Number(requestAmount) < 0.1 || status === "requesting"}
                     className="w-full"
                   >
                     {status === "requesting" ? "Generating…" : "Get deposit amount"}
@@ -331,7 +332,7 @@ function formatCountdown(totalSeconds) {
 function describeInvoiceError(code) {
   switch (code) {
     case "invalid_amount":
-      return "Enter a valid amount greater than $0.";
+      return "Enter a valid amount of at least $0.10.";
     case "could_not_allocate_amount":
       return "Couldn't generate a unique amount right now — please try again.";
     default:

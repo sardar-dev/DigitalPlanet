@@ -68,6 +68,7 @@ export default function Admin() {
       id: null,
       title: "",
       description: "",
+      short_description: "",
       sell_price: "",
       cost_price: "",
       available_stock: "",
@@ -75,6 +76,10 @@ export default function Admin() {
       delivery: "Within 1-6 hours",
       selected: true,
       activation_field: "",
+      image_url: "",
+      category: "",
+      featured: false,
+      low_stock_threshold: "",
     };
   }
 
@@ -90,6 +95,7 @@ export default function Admin() {
       ...(manualForm.id !== null ? { id: manualForm.id } : {}),
       title: manualForm.title,
       description: manualForm.description,
+      short_description: manualForm.short_description || null,
       sell_price: Number(manualForm.sell_price),
       cost_price: Number(manualForm.cost_price || 0),
       available_stock: Number(manualForm.available_stock),
@@ -97,6 +103,11 @@ export default function Admin() {
       delivery: manualForm.delivery,
       selected: manualForm.selected,
       activation_field: manualForm.activation_field || null,
+      image_url: manualForm.image_url || null,
+      category: manualForm.category || null,
+      featured: Boolean(manualForm.featured),
+      low_stock_threshold:
+        manualForm.low_stock_threshold === "" ? null : Number(manualForm.low_stock_threshold),
     };
     const res = await fetch("/api/admin/manual-products", {
       method: "POST",
@@ -118,6 +129,7 @@ export default function Admin() {
       id: p.id,
       title: p.title,
       description: p.description || "",
+      short_description: p.short_description || "",
       sell_price: p.sell_price,
       cost_price: p.cost_price,
       available_stock: p.available_stock,
@@ -125,7 +137,29 @@ export default function Admin() {
       delivery: p.delivery || "",
       selected: p.selected,
       activation_field: p.activation_field || "",
+      image_url: p.image_url || "",
+      category: p.category || "",
+      featured: Boolean(p.featured),
+      low_stock_threshold: p.low_stock_threshold ?? "",
     });
+  }
+
+  async function bulkUpdateProducts(ids, patch) {
+    await fetch("/api/admin/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, ...patch }),
+    });
+    loadProducts();
+  }
+
+  async function bulkUpdateManualProducts(ids, patch) {
+    await fetch("/api/admin/manual-products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, ...patch }),
+    });
+    loadManualProducts();
   }
 
   async function archiveManualProduct(id) {
@@ -350,6 +384,7 @@ export default function Admin() {
           setSortAvailableFirst={setSortAvailableFirst}
           visibleProducts={visibleProducts}
           updateProduct={updateProduct}
+          bulkUpdateProducts={bulkUpdateProducts}
         />
       )}
 
@@ -363,6 +398,7 @@ export default function Admin() {
           editManualProduct={editManualProduct}
           archiveManualProduct={archiveManualProduct}
           resetManualForm={() => setManualForm(emptyManualForm())}
+          bulkUpdateManualProducts={bulkUpdateManualProducts}
         />
       )}
 

@@ -289,6 +289,49 @@ BEP20. Other tokens or networks will be lost."**
 
 **New env vars**: none.
 
+## Product merchandising (image, category, featured, low-stock threshold, short description)
+
+Every product — DigiTrust or manual — can now carry, from `/admin` →
+Products (click **Edit** on a row) or Manual Products:
+
+- **Image/logo URL** — paste a link to an already-hosted image. No
+  file upload, no Supabase Storage, no extra bandwidth — just a
+  `text` column. Leave blank and the storefront falls back to the
+  existing letter-icon placeholder (broken/missing image links fail
+  silently the same way, never a broken-image icon).
+- **Category** — free text (e.g. "Streaming", "AI Tools"). The
+  storefront builds its filter tabs from whatever categories already
+  exist in the products you've fetched — no new table, no new query,
+  same data `/api/products` already returns. Filter tabs only appear
+  once there's more than one category in use; the existing search box
+  is unchanged and works together with the filter.
+- **Featured** — pin a product to sort first on the storefront (⭐
+  shown on its card and in the admin tables). Ties break alphabetically
+  as before.
+- **Low-stock threshold** — per-product override for the "low stock"
+  warning cutoff (storefront shows 🔥 + a warning color at or below
+  this count). Leave blank to keep the previous fixed cutoff of 3.
+- **Short description** — a short tagline for the storefront grid
+  card, separate from the longer `description` shown in the Buy
+  modal. Falls back to `description` if left blank, so nothing
+  changes for existing products until you set one.
+
+**Bulk actions** — select multiple rows (checkbox column, "select
+all" in the header) on either the Products or Manual Products table
+to: show on site, hide from site, or adjust price by a **percentage**
+(e.g. `+5` or `-10`) across all selected at once. Deliberately no bulk
+absolute-price-set and no bulk delete, so a typo can't zero out many
+products' prices or wipe them out in one click. All bulk actions still
+go through the same server-side validation as single-product edits.
+
+**Migration**: run `supabase/migration_009_product_merchandising.sql`.
+
+**New env vars**: none. **No Supabase Storage, Realtime, or extra
+cron used** — image is a pasted URL, categories/featured/threshold
+are plain columns read from the same product list the storefront
+already fetches once per page load (cached 30s at Vercel's edge, same
+as before this change).
+
 ## WhatsApp channel button
 
 `/admin` → **Settings** tab — paste your WhatsApp channel/group

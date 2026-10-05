@@ -1,6 +1,9 @@
+import { Fragment, useState } from "react";
 import { FormInput } from "../ui/FormInput";
-import { SecondaryButton } from "../ui/Button";
+import { SecondaryButton, LinkButton } from "../ui/Button";
 import DataTable from "./DataTable";
+import BulkActionBar from "./BulkActionBar";
+import ProductMerchandisingFields from "./ProductMerchandisingFields";
 
 export default function ProductsTab({
   productSearch,
@@ -9,7 +12,29 @@ export default function ProductsTab({
   setSortAvailableFirst,
   visibleProducts,
   updateProduct,
+  bulkUpdateProducts,
 }) {
+  const [selected, setSelected] = useState(() => new Set());
+  const [editingId, setEditingId] = useState(null);
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function runBulk(patch) {
+    await bulkUpdateProducts(Array.from(selected), patch);
+    clearSelection();
+  }
+
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-3 justify-between">
@@ -24,47 +49,100 @@ export default function ProductsTab({
           {sortAvailableFirst ? "Sorted: in-stock first ✓" : "Sort: in-stock first"}
         </SecondaryButton>
       </div>
-      <DataTable>
+
+      <BulkActionBar
+        count={selected.size}
+        onShow={() => runBulk({ selected: true })}
+        onHide={() => runBulk({ selected: false })}
+        onAdjustPercent={(pct) => runBulk({ sell_price_delta_percent: pct })}
+        onClear={clearSelection}
+      />
+
+      <DataTable minWidth="min-w-[720px]">
         <thead>
           <tr className="text-left text-muted border-b border-border">
+            <th className="py-3 px-4">
+              <input
+                type="checkbox"
+                aria-label="Select all visible products"
+                checked={visibleProducts.length > 0 && selected.size === visibleProducts.length}
+                onChange={(e) =>
+                  setSelected(e.target.checked ? new Set(visibleProducts.map((p) => p.id)) : new Set())
+                }
+                className="h-4 w-4 accent-brand"
+              />
+            </th>
             <th className="py-3 px-4">Product</th>
             <th className="py-3 px-4">Real stock</th>
             <th className="py-3 px-4">Shown as</th>
             <th className="py-3 px-4">DigiTrust price</th>
             <th className="py-3 px-4">Your price</th>
             <th className="py-3 px-4">Show on site</th>
+            <th className="py-3 px-4">Details</th>
           </tr>
         </thead>
         <tbody>
           {visibleProducts.map((p) => (
-            <tr
-              key={p.id}
-              className={`border-b border-border last:border-0 ${
-                p.available_stock === 0 ? "opacity-50" : ""
-              }`}
-            >
-              <td className="py-3 px-4 text-ink">{p.title}</td>
-              <td className="py-3 px-4 font-mono text-muted">{p.real_stock}</td>
-              <td className="py-3 px-4 font-mono text-ink">{p.available_stock}</td>
-              <td className="py-3 px-4 font-mono text-muted">${Number(p.cost_price).toFixed(2)}</td>
-              <td className="py-3 px-4">
-                <input
-                  type="number"
-                  step="0.01"
-                  defaultValue={p.sell_price}
-                  onBlur={(e) => updateProduct(p.id, { sell_price: Number(e.target.value) })}
-                  className="w-24 rounded-md border border-border px-2 py-1 font-mono text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-              </td>
-              <td className="py-3 px-4">
-                <input
-                  type="checkbox"
-                  checked={p.selected}
-                  onChange={(e) => updateProduct(p.id, { selected: e.target.checked })}
-                  className="h-4 w-4 accent-brand"
-                />
-              </td>
-            </tr>
+            <Fragment key={p.id}>
+              <tr
+                className={`border-b border-border last:border-0 ${
+                  p.available_stock === 0 ? "opacity-50" : ""
+                }`}
+              >
+                <td className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.id)}
+                    onChange={() => toggle(p.id)}
+                    aria-label={`Select ${p.title}`}
+                    className="h-4 w-4 accent-brand"
+                  />
+                </td>
+                <td className="py-3 px-4 text-ink">
+                  {p.title}
+                  {p.featured && <span className="ml-1.5" title="Featured">⭐</span>}
+                </td>
+                <td className="py-3 px-4 font-mono text-muted">{p.real_stock}</td>
+                <td className="py-3 px-4 font-mono text-ink">{p.available_stock}</td>
+                <td className="py-3 px-4 font-mono text-muted">${Number(p.cost_price).toFixed(2)}</td>
+                <td className="py-3 px-4">
+                  <input
+                    type="number"
+                    step="0.01"
+                    defaultValue={p.sell_price}
+                    onBlur={(e) => updateProduct(p.id, { sell_price: Number(e.target.value) })}
+                    className="w-24 rounded-md border border-border px-2 py-1 font-mono text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                </td>
+                <td className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={p.selected}
+                    onChange={(e) => updateProduct(p.id, { selected: e.target.checked })}
+                    className="h-4 w-4 accent-brand"
+                  />
+                </td>
+                <td className="py-3 px-4">
+                  <LinkButton onClick={() => setEditingId(editingId === p.id ? null : p.id)} className="text-xs">
+                    {editingId === p.id ? "Close" : "Edit"}
+                  </LinkButton>
+                </td>
+              </tr>
+              {editingId === p.id && (
+                <tr className="border-b border-border last:border-0 bg-bg">
+                  <td colSpan={8} className="p-4">
+                    <ProductMerchandisingFields
+                      product={p}
+                      onSave={(patch) => {
+                        updateProduct(p.id, patch);
+                        setEditingId(null);
+                      }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </DataTable>

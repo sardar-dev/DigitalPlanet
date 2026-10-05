@@ -11,9 +11,12 @@ export default async function handler(req, res) {
 
   const { data, error } = await supabaseAdmin
     .from("products")
-    .select("id, title, description, sell_price, available_stock, requires_email, delivery, provider, activation_field, updated_at")
+    .select(
+      "id, title, description, short_description, image_url, category, featured, low_stock_threshold, sell_price, available_stock, requires_email, delivery, provider, activation_field, updated_at"
+    )
     .eq("selected", true)
     .gt("available_stock", 0)
+    .order("featured", { ascending: false })
     .order("title", { ascending: true });
 
   if (error) {

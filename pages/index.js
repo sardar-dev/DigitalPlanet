@@ -22,10 +22,11 @@ export async function getServerSideProps() {
   const { data } = await supabaseAdmin
     .from("products")
     .select(
-      "id, title, description, sell_price, available_stock, requires_email, delivery, provider, activation_field, updated_at"
+      "id, title, description, short_description, image_url, category, featured, low_stock_threshold, sell_price, available_stock, requires_email, delivery, provider, activation_field, updated_at"
     )
     .eq("selected", true)
     .gt("available_stock", 0)
+    .order("featured", { ascending: false })
     .order("title", { ascending: true });
 
   return { props: { initialProducts: data || [] } };
@@ -38,6 +39,7 @@ export default function Storefront({ initialProducts }) {
   const [loadError, setLoadError] = useState(false);
   const [active, setActive] = useState(null); // product being purchased
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState(""); // "" = all
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -69,17 +71,29 @@ export default function Storefront({ initialProducts }) {
       .finally(() => setLoading(false));
   }
 
+  // Categories derived from whatever's already in `products` — no
+  // extra query, no separate table. Only shown once there's more
+  // than one category worth filtering between.
+  const categories = useMemo(() => {
+    const set = new Set();
+    for (const p of products) if (p.category) set.add(p.category);
+    return Array.from(set).sort();
+  }, [products]);
+
   // Filtering happens entirely in the browser — no extra requests to
   // our server per keystroke, since we already have the full list.
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
+    return products.filter((p) => {
+      if (category && p.category !== category) return false;
+      if (!q) return true;
+      return (
         p.title.toLowerCase().includes(q) ||
-        (p.description || "").toLowerCase().includes(q)
-    );
-  }, [products, search]);
+        (p.description || "").toLowerCase().includes(q) ||
+        (p.short_description || "").toLowerCase().includes(q)
+      );
+    });
+  }, [products, search, category]);
 
   return (
     <div className="flex min-h-screen flex-col bg-bg font-body text-ink">
@@ -144,7 +158,7 @@ export default function Storefront({ initialProducts }) {
         {/* Catalog */}
         <section id="catalog">
           <PageContainer className="py-10">
-            <div className="mb-6 max-w-sm">
+            <div className="mb-4 max-w-sm">
               <FormInput
                 label="Search"
                 value={search}
@@ -153,6 +167,30 @@ export default function Storefront({ initialProducts }) {
                 aria-label="Search products"
               />
             </div>
+
+            {categories.length > 1 && (
+              <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Filter by category">
+                <button
+                  onClick={() => setCategory("")}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    category === "" ? "bg-brand text-white" : "bg-brand-soft text-brand hover:bg-brand/10"
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCategory(c)}
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      category === c ? "bg-brand text-white" : "bg-brand-soft text-brand hover:bg-brand/10"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {loading && products.length === 0 && <LoadingState label="Loading stock…" />}
 
@@ -172,7 +210,9 @@ export default function Storefront({ initialProducts }) {
             )}
 
             {!loading && !loadError && products.length > 0 && visible.length === 0 && (
-              <EmptyState title={`No products match "${search}"`} />
+              <EmptyState
+                title={search ? `No products match "${search}"` : "No products in this category"}
+              />
             )}
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

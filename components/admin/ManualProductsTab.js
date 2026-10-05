@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { FormInput, FormTextarea, FormSelect } from "../ui/FormInput";
 import { PrimaryButton, SecondaryButton, LinkButton } from "../ui/Button";
 import SectionHeading from "../ui/SectionHeading";
 import DataTable from "./DataTable";
+import BulkActionBar from "./BulkActionBar";
 
 export default function ManualProductsTab({
   manualForm,
@@ -12,7 +14,28 @@ export default function ManualProductsTab({
   editManualProduct,
   archiveManualProduct,
   resetManualForm,
+  bulkUpdateManualProducts,
 }) {
+  const [selected, setSelected] = useState(() => new Set());
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function runBulk(patch) {
+    await bulkUpdateManualProducts(Array.from(selected), patch);
+    clearSelection();
+  }
+
   return (
     <div className="max-w-3xl space-y-10">
       <div>
@@ -24,10 +47,17 @@ export default function ManualProductsTab({
             onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
           />
           <FormTextarea
-            label="Description (optional)"
+            label="Description (full, shown in checkout)"
             value={manualForm.description}
             onChange={(e) => setManualForm({ ...manualForm, description: e.target.value })}
             rows={2}
+          />
+          <FormTextarea
+            label="Short description (storefront card, optional)"
+            value={manualForm.short_description}
+            onChange={(e) => setManualForm({ ...manualForm, short_description: e.target.value })}
+            rows={2}
+            hint="Shown on the product grid card. Falls back to the description above if left blank."
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormInput
@@ -71,6 +101,57 @@ export default function ManualProductsTab({
             <option value="email">Email</option>
             <option value="username">Username</option>
           </FormSelect>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormInput
+              label="Image/logo URL (optional)"
+              value={manualForm.image_url}
+              onChange={(e) => setManualForm({ ...manualForm, image_url: e.target.value })}
+              placeholder="https://…"
+              hint="Paste a link to an already-hosted image. Leave blank for the default letter icon."
+            />
+            <FormInput
+              label="Category (optional)"
+              value={manualForm.category}
+              onChange={(e) => setManualForm({ ...manualForm, category: e.target.value })}
+              placeholder="e.g. Streaming"
+              hint="Used to build filter tabs on the homepage."
+            />
+          </div>
+          {manualForm.image_url && (
+            <img
+              src={manualForm.image_url}
+              alt="Preview"
+              className="h-12 w-12 rounded-lg border border-border object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          )}
+
+          <div className="flex flex-wrap items-end gap-4">
+            <FormInput
+              label="Low-stock threshold (optional)"
+              type="number"
+              min="0"
+              step="1"
+              value={manualForm.low_stock_threshold}
+              onChange={(e) => setManualForm({ ...manualForm, low_stock_threshold: e.target.value })}
+              placeholder="3 (default)"
+              className="w-44"
+              hint="Shows a low-stock warning at or below this count."
+            />
+            <label className="flex items-center gap-2 pb-2.5 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={manualForm.featured}
+                onChange={(e) => setManualForm({ ...manualForm, featured: e.target.checked })}
+                className="h-4 w-4 accent-brand"
+              />
+              Featured (shown first on storefront)
+            </label>
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
@@ -94,9 +175,27 @@ export default function ManualProductsTab({
 
       <div>
         <SectionHeading title="Your manual products" />
-        <DataTable>
+        <BulkActionBar
+          count={selected.size}
+          onShow={() => runBulk({ selected: true })}
+          onHide={() => runBulk({ selected: false })}
+          onAdjustPercent={(pct) => runBulk({ sell_price_delta_percent: pct })}
+          onClear={clearSelection}
+        />
+        <DataTable minWidth="min-w-[720px]">
           <thead>
             <tr className="text-left text-muted border-b border-border">
+              <th className="py-3 px-4">
+                <input
+                  type="checkbox"
+                  aria-label="Select all manual products"
+                  checked={manualProducts.length > 0 && selected.size === manualProducts.length}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? new Set(manualProducts.map((p) => p.id)) : new Set())
+                  }
+                  className="h-4 w-4 accent-brand"
+                />
+              </th>
               <th className="py-3 px-4">Title</th>
               <th className="py-3 px-4">Stock</th>
               <th className="py-3 px-4">Sell price</th>
@@ -109,7 +208,19 @@ export default function ManualProductsTab({
           <tbody>
             {manualProducts.map((p) => (
               <tr key={p.id} className="border-b border-border last:border-0">
-                <td className="py-3 px-4 text-ink">{p.title}</td>
+                <td className="py-3 px-4">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.id)}
+                    onChange={() => toggle(p.id)}
+                    aria-label={`Select ${p.title}`}
+                    className="h-4 w-4 accent-brand"
+                  />
+                </td>
+                <td className="py-3 px-4 text-ink">
+                  {p.title}
+                  {p.featured && <span className="ml-1.5" title="Featured">⭐</span>}
+                </td>
                 <td className="py-3 px-4 font-mono text-muted">{p.available_stock}</td>
                 <td className="py-3 px-4 font-mono text-ink">${Number(p.sell_price).toFixed(2)}</td>
                 <td className="py-3 px-4 font-mono text-muted">${Number(p.cost_price).toFixed(2)}</td>

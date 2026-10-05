@@ -25,8 +25,14 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const {
       id, // omit to create a new product; pass to update an existing one
+      ids, // bulk action instead — see below
       title,
       description,
+      short_description, // short tagline shown on the storefront card
+      image_url, // pasted link to an already-hosted logo/image
+      category, // free-text tag, used for storefront filter tabs
+      featured, // pin to show first on the storefront
+      low_stock_threshold, // per-product "low stock" cutoff; null = default (3)
       sell_price,
       cost_price,
       available_stock,
@@ -34,7 +40,46 @@ export default async function handler(req, res) {
       delivery, // estimated delivery time text, e.g. "Within 1-6 hours"
       selected, // active/inactive
       activation_field, // null | 'email' | 'username' — what the customer must provide for activation
+      sell_price_delta_percent, // bulk-only: e.g. 5 for +5%
     } = req.body || {};
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      // Bulk actions, scoped to manual products only (provider filter
+      // below) so this can never accidentally touch a DigiTrust row.
+      if (typeof selected === "boolean") {
+        const { error } = await supabaseAdmin
+          .from("products")
+          .update({ selected, updated_at: new Date().toISOString() })
+          .in("id", ids)
+          .eq("provider", "manual");
+        if (error) return res.status(500).json({ success: false, error: error.message });
+        return res.status(200).json({ success: true, updated: ids.length });
+      }
+      if (sell_price_delta_percent !== undefined) {
+        const pct = Number(sell_price_delta_percent);
+        if (!Number.isFinite(pct) || pct <= -100) {
+          return res.status(400).json({ success: false, error: "invalid_percent" });
+        }
+        const { data: rows, error: readErr } = await supabaseAdmin
+          .from("products")
+          .select("id, sell_price")
+          .in("id", ids)
+          .eq("provider", "manual");
+        if (readErr) return res.status(500).json({ success: false, error: readErr.message });
+
+        for (const r of rows) {
+          const newPrice = Math.max(0.01, Math.round(Number(r.sell_price) * (1 + pct / 100) * 100) / 100);
+          const { error } = await supabaseAdmin
+            .from("products")
+            .update({ sell_price: newPrice, updated_at: new Date().toISOString() })
+            .eq("id", r.id)
+            .eq("provider", "manual");
+          if (error) return res.status(500).json({ success: false, error: error.message });
+        }
+        return res.status(200).json({ success: true, updated: rows.length });
+      }
+      return res.status(400).json({ success: false, error: "no_bulk_action_specified" });
+    }
 
     const validActivation =
       activation_field === undefined ||
@@ -86,6 +131,14 @@ export default async function handler(req, res) {
           delivery: delivery || "Within 24 hours",
           selected: Boolean(selected),
           activation_field: normalizedActivation,
+          short_description: short_description || null,
+          image_url: image_url || null,
+          category: category || null,
+          featured: Boolean(featured),
+          low_stock_threshold:
+            low_stock_threshold === undefined || low_stock_threshold === null || low_stock_threshold === ""
+              ? null
+              : Math.max(0, Number(low_stock_threshold) || 0),
         })
         .select()
         .single();
@@ -138,6 +191,16 @@ export default async function handler(req, res) {
     if (activation_field !== undefined) {
       patch.activation_field = normalizedActivation;
       if (normalizedActivation === "email") patch.requires_email = true;
+    }
+    if (short_description !== undefined) patch.short_description = short_description || null;
+    if (image_url !== undefined) patch.image_url = image_url || null;
+    if (category !== undefined) patch.category = category || null;
+    if (typeof featured === "boolean") patch.featured = featured;
+    if (low_stock_threshold !== undefined) {
+      patch.low_stock_threshold =
+        low_stock_threshold === null || low_stock_threshold === ""
+          ? null
+          : Math.max(0, Number(low_stock_threshold) || 0);
     }
 
     const { data: updated, error: updateErr } = await supabaseAdmin

@@ -10,9 +10,12 @@ import { PrimaryButton } from "./Button";
 // on hover. Pure CSS transform/perspective, no JS and no library.
 export default function ProductCard({ product, onBuy, disabled }) {
   const isManual = product.provider === "manual";
-  const lowStock = product.available_stock > 0 && product.available_stock <= 3;
+  const threshold =
+    product.low_stock_threshold != null ? Number(product.low_stock_threshold) : 3;
+  const lowStock = product.available_stock > 0 && product.available_stock <= threshold;
   const outOfStock = product.available_stock <= 0;
   const letter = (product.title || "?").trim().charAt(0).toUpperCase();
+  const blurb = product.short_description || product.description;
 
   return (
     <div
@@ -42,16 +45,27 @@ export default function ProductCard({ product, onBuy, disabled }) {
         </span>
       </div>
 
-      <h3 className="text-base font-semibold text-ink">{product.title}</h3>
-      {product.description && (
-        <p className="mt-1 line-clamp-2 text-sm text-muted">{product.description}</p>
-      )}
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-base font-semibold text-ink">{product.title}</h3>
+        {product.featured && (
+          <span
+            className="flex-shrink-0 text-base"
+            role="img"
+            aria-label="Featured product"
+            title="Featured"
+          >
+            ⭐
+          </span>
+        )}
+      </div>
+      {blurb && <p className="mt-1 line-clamp-2 text-sm text-muted">{blurb}</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
         {outOfStock ? (
           <span className="font-medium text-danger">Out of stock</span>
         ) : (
           <span className={lowStock ? "font-medium text-warning" : ""}>
+            {lowStock && "🔥 "}
             {product.available_stock} available
           </span>
         )}

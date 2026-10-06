@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PrimaryButton } from "./Button";
 
 // Storefront product card. Shows provider-neutral labels only —
@@ -16,20 +17,20 @@ export default function ProductCard({ product, onBuy, disabled }) {
   const outOfStock = product.available_stock <= 0;
   const letter = (product.title || "?").trim().charAt(0).toUpperCase();
   const blurb = product.short_description || product.description;
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(product.image_url) && !imageFailed;
 
   return (
     <div
       className="group flex flex-col rounded-xl border border-border bg-surface p-5 shadow-[0_10px_20px_-8px_rgba(23,33,58,0.18),0_2px_4px_0_rgba(23,33,58,0.06)] transition-all duration-200 [transform:perspective(900px)_rotateX(2deg)_rotateY(-1.5deg)] hover:[transform:perspective(900px)_translateY(-4px)_rotateX(0.5deg)_rotateY(-0.5deg)] hover:shadow-[0_18px_30px_-10px_rgba(23,33,58,0.22),0_4px_8px_0_rgba(23,33,58,0.08)]"
     >
       <div className="mb-3 flex items-start justify-between gap-2">
-        {product.image_url ? (
+        {showImage ? (
           <img
             src={product.image_url}
             alt=""
             className="h-10 w-10 rounded-lg border border-border object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
+            onError={() => setImageFailed(true)}
           />
         ) : (
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-soft text-sm font-semibold text-brand">

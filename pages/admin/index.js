@@ -272,12 +272,17 @@ export default function Admin() {
   }
 
   async function updateProduct(id, patch) {
-    await fetch("/api/admin/products", {
+    const res = await fetch("/api/admin/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     });
+    const data = await res.json().catch(() => ({ success: false, error: "bad_response" }));
+    if (!data.success) {
+      alert(`Failed to save: ${data.error || res.status}`);
+    }
     loadProducts();
+    return data;
   }
 
   async function setOrderStatus(id, status) {

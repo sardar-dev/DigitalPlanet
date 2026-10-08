@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { supabaseAdmin } from "../lib/supabaseAdmin";
@@ -33,6 +34,7 @@ export async function getServerSideProps() {
 }
 
 export default function Storefront({ initialProducts }) {
+  const router = useRouter();
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState(initialProducts || []);
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,7 @@ export default function Storefront({ initialProducts }) {
   const [active, setActive] = useState(null); // product being purchased
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(""); // "" = all
+  const [sharedNotFound, setSharedNotFound] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -52,6 +55,25 @@ export default function Storefront({ initialProducts }) {
     return () => sub.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Shareable product links: /?product=<id> opens that product's buy
+  // popup automatically, so a link someone pastes elsewhere lands
+  // straight on the right item instead of a bare homepage. No new
+  // route/page needed — same popup, just opened on load.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const productId = router.query.product;
+    if (!productId || active) return;
+    if (products.length === 0) return; // wait for the list to load first
+
+    const match = products.find((p) => String(p.id) === String(productId));
+    if (match) {
+      if (session) setActive(match);
+    } else {
+      setSharedNotFound(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, router.query.product, products, session]);
 
   function loadProducts(showLoadingState = true) {
     if (showLoadingState) setLoading(true);
@@ -215,12 +237,20 @@ export default function Storefront({ initialProducts }) {
               />
             )}
 
+            {sharedNotFound && (
+              <Alert variant="warning" className="mb-4">
+                That shared product link isn't available anymore — it may be out of stock or
+                removed.
+              </Alert>
+            )}
+
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visible.map((p) => (
                 <ProductCard
                   key={p.id}
                   product={p}
                   onBuy={() => (session ? setActive(p) : (window.location.href = "/login"))}
+                  onShare={() => shareProduct(p)}
                 />
               ))}
             </div>
@@ -230,9 +260,34 @@ export default function Storefront({ initialProducts }) {
 
       <SiteFooter />
 
-      {active && <BuyModal product={active} onClose={() => setActive(null)} />}
+      {active && (
+        <BuyModal
+          product={active}
+          onClose={() => {
+            setActive(null);
+            // Drop ?product= so closing the popup doesn't reopen it
+            // on the next render / back navigation.
+            if (router.query.product) {
+              const { product: _drop, ...rest } = router.query;
+              router.replace({ pathname: "/", query: rest }, undefined, { shallow: true });
+            }
+          }}
+        />
+      )}
     </div>
   );
+}
+
+function shareProduct(product) {
+  const url = `${window.location.origin}/?product=${product.id}`;
+  if (navigator.share) {
+    navigator.share({ title: product.title, url }).catch(() => {});
+    return;
+  }
+  navigator.clipboard
+    ?.writeText(url)
+    .then(() => window.alert("Product link copied to clipboard"))
+    .catch(() => window.prompt("Copy this link:", url));
 }
 
 function BuyModal({ product, onClose }) {

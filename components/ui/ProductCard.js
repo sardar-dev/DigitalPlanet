@@ -9,7 +9,7 @@ import { PrimaryButton } from "./Button";
 // grid reads as a stack of physical cards rather than flat tiles at
 // rest), and softens — lifts slightly, tilt relaxes, shadow spreads —
 // on hover. Pure CSS transform/perspective, no JS and no library.
-export default function ProductCard({ product, onBuy, disabled }) {
+export default function ProductCard({ product, onBuy, onShare, disabled }) {
   const isManual = product.provider === "manual";
   const threshold =
     product.low_stock_threshold != null ? Number(product.low_stock_threshold) : 3;
@@ -37,13 +37,26 @@ export default function ProductCard({ product, onBuy, disabled }) {
             {letter}
           </div>
         )}
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-            isManual ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
-          }`}
-        >
-          {isManual ? "Manual delivery" : "Automatic delivery"}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+              isManual ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
+            }`}
+          >
+            {isManual ? "Manual delivery" : "Automatic delivery"}
+          </span>
+          {onShare && (
+            <button
+              type="button"
+              onClick={onShare}
+              title="Copy shareable link to this product"
+              aria-label="Share this product"
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border text-muted hover:border-brand hover:text-brand"
+            >
+              <span aria-hidden="true">🔗</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-start justify-between gap-2">

@@ -7,11 +7,11 @@ const VARIANTS = {
   warning: "bg-warning-soft text-warning border border-warning/20",
 };
 
-export default function Alert({ variant = "info", children }) {
+export default function Alert({ variant = "info", children, className = "" }) {
   if (!children) return null;
   return (
     <div
-      className={`rounded-lg px-3.5 py-2.5 text-sm ${VARIANTS[variant] || VARIANTS.info}`}
+      className={`rounded-lg px-3.5 py-2.5 text-sm ${VARIANTS[variant] || VARIANTS.info} ${className}`}
       role={variant === "error" ? "alert" : "status"}
       aria-live="polite"
     >

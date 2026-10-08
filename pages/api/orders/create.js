@@ -73,7 +73,18 @@ export default async function handler(req, res) {
   }
 
   const unitPrice = Number(localProduct.sell_price);
-  const total = Number((unitPrice * quantity).toFixed(4));
+  const base = Number((unitPrice * quantity).toFixed(2));
+
+  // Same unique-fingerprint trick used for wallet top-up invoices:
+  // the customer is asked to send base + a random 0.0010-0.0090 tail
+  // (e.g. $5 -> $5.0047) instead of a round figure. This isn't for
+  // collision-avoidance here (orders are matched by tx hash, not by
+  // amount lookup) — it's so the on-chain amount a bystander sees
+  // pending to our wallet can never be "obviously" the round price of
+  // a product, which is the same front-running protection wallet
+  // deposits already get.
+  const fingerprint = Math.floor(Math.random() * 81) + 10; // 10-90
+  const total = Number((base + fingerprint / 10000).toFixed(4));
 
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")

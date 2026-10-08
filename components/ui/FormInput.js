@@ -8,7 +8,7 @@ export function FormInput({ label, hint, error, className = "", id, ...props }) 
       {label && <span className="mb-1.5 block font-medium text-ink">{label}</span>}
       <input
         id={inputId}
-        className={`w-full rounded-lg border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+        className={`w-full rounded-lg border bg-surface px-3.5 py-2.5 text-base text-ink sm:text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 ${
           error ? "border-danger" : "border-border focus:border-brand"
         } ${className}`}
         aria-invalid={error ? "true" : undefined}
@@ -36,7 +36,7 @@ export function FormTextarea({ label, hint, error, className = "", id, ...props 
       {label && <span className="mb-1.5 block font-medium text-ink">{label}</span>}
       <textarea
         id={inputId}
-        className={`w-full rounded-lg border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+        className={`w-full rounded-lg border bg-surface px-3.5 py-2.5 text-base text-ink sm:text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 ${
           error ? "border-danger" : "border-border focus:border-brand"
         } ${className}`}
         aria-invalid={error ? "true" : undefined}
@@ -55,7 +55,7 @@ export function FormSelect({ label, hint, className = "", id, children, ...props
       {label && <span className="mb-1.5 block font-medium text-ink">{label}</span>}
       <select
         id={inputId}
-        className={`w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 ${className}`}
+        className={`w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-base text-ink sm:text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 ${className}`}
         {...props}
       >
         {children}

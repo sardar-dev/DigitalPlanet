@@ -499,3 +499,9 @@ pages/admin/index.js                         (Manual Products tab, Deliver butto
 - [ ] `/admin` Dashboard still shows DigiTrust balance, last sync
       time, sales/profit.
 - [ ] Price-increase auto-hide still only affects DigiTrust products.
+
+## Mobile polish, link previews & admin statistics
+
+- **Branded link previews:** static `public/og-image.png`, app icons and `manifest.webmanifest` (served by the Vercel CDN, no function cost). A shared `/?product=<id>` link now previews with that product's title, blurb, price and image (uses the already-fetched product list, no extra query).
+- **Mobile polish:** buy popup is a bottom sheet on phones, 44px minimum tap targets, 16px inputs (stops iOS zoom-on-focus), safe-area spacing for the WhatsApp button.
+- **Admin → Statistics tab:** users (total/7d/30d/buyers), orders by status and payment method, revenue (all/7d/30d), 14-day activity, products and best sellers, wallet totals, newest users. Loads only when the tab is opened or Refreshed (head-only COUNT queries + one capped orders query). No new env vars or migrations.

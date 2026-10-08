@@ -8,9 +8,15 @@ export default function SEO({
   description,
   path = "",
   noindex = false,
+  image,
 }) {
   const fullTitle = title ? `${title} — ${SITE_NAME}` : `${SITE_NAME}`;
   const url = `${SITE_URL}${path}`;
+  // Share previews need an absolute image URL. Defaults to the static
+  // branded card in /public (served by Vercel CDN, no function cost).
+  const img = image
+    ? /^https?:\/\//.test(image) ? image : `${SITE_URL}${image}`
+    : `${SITE_URL}/og-image.png`;
   const desc =
     description ||
     "DigiVerse — buy digital products and accounts instantly online, pay with USDT (BEP20) or wallet balance.";
@@ -28,19 +34,20 @@ export default function SEO({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={desc} />
       <meta property="og:url" content={url} />
+      <meta property="og:image" content={img} />
+      <meta property="og:image:alt" content={fullTitle} />
 
       {/* Twitter card */}
-      <meta name="twitter:card" content="summary" />
+      <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={desc} />
+      <meta name="twitter:image" content={img} />
+      <meta name="theme-color" content="#3169F5" />
 
-      {/* Emoji favicon — no image file needed */}
-      <link
-        rel="icon"
-        href={`data:image/svg+xml,${encodeURIComponent(
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌌</text></svg>'
-        )}`}
-      />
+      {/* Branded icons (static files in /public) */}
+      <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      <link rel="manifest" href="/manifest.webmanifest" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
     </Head>
   );

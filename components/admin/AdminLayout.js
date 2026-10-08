@@ -2,6 +2,7 @@ import SEO from "../SEO";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "stats", label: "Statistics" },
   { id: "products", label: "Products" },
   { id: "manual", label: "Manual Products" },
   { id: "orders", label: "Orders" },

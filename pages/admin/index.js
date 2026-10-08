@@ -5,6 +5,7 @@ import DashboardTab from "../../components/admin/DashboardTab";
 import ProductsTab from "../../components/admin/ProductsTab";
 import ManualProductsTab from "../../components/admin/ManualProductsTab";
 import OrdersTab from "../../components/admin/OrdersTab";
+import StatsTab from "../../components/admin/StatsTab";
 import DebugTab from "../../components/admin/DebugTab";
 import SettingsTab from "../../components/admin/SettingsTab";
 import ManualDeliverModal from "../../components/admin/ManualDeliverModal";
@@ -380,6 +381,8 @@ export default function Admin() {
           submitAdjustment={submitAdjustment}
         />
       )}
+
+      {tab === "stats" && <StatsTab />}
 
       {tab === "products" && (
         <ProductsTab

@@ -51,7 +51,7 @@ export default function ProductCard({ product, onBuy, onShare, disabled }) {
               onClick={onShare}
               title="Copy shareable link to this product"
               aria-label="Share this product"
-              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border text-muted hover:border-brand hover:text-brand"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-border text-muted hover:border-brand hover:text-brand"
             >
               <span aria-hidden="true">🔗</span>
             </button>

@@ -19,7 +19,7 @@ import { SITE_NAME, SITE_TAGLINE } from "../lib/siteConfig";
 // Server-rendered so search engines (and the first paint) see the
 // actual product list immediately, not an empty page that fills in
 // after a client-side fetch.
-export async function getServerSideProps() {
+export async function getServerSideProps({ query }) {
   const { data } = await supabaseAdmin
     .from("products")
     .select(
@@ -30,10 +30,27 @@ export async function getServerSideProps() {
     .order("featured", { ascending: false })
     .order("title", { ascending: true });
 
-  return { props: { initialProducts: data || [] } };
+  const list = data || [];
+  // Shared product links (?product=<id>) get a product-specific link
+  // preview (title/blurb/image) in WhatsApp/Telegram etc. Taken from the
+  // list we already fetched — no extra query.
+  const shared = query?.product
+    ? list.find((p) => String(p.id) === String(query.product))
+    : null;
+  const sharedMeta = shared
+    ? {
+        id: String(shared.id),
+        title: shared.title,
+        description: (shared.short_description || shared.description || "").slice(0, 200),
+        image: shared.image_url || null,
+        price: Number(shared.sell_price),
+      }
+    : null;
+
+  return { props: { initialProducts: list, sharedMeta } };
 }
 
-export default function Storefront({ initialProducts }) {
+export default function Storefront({ initialProducts, sharedMeta }) {
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState(initialProducts || []);
@@ -119,7 +136,16 @@ export default function Storefront({ initialProducts }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg font-body text-ink">
-      <SEO />
+      {sharedMeta ? (
+        <SEO
+          title={sharedMeta.title}
+          description={`${sharedMeta.description ? sharedMeta.description + " — " : ""}$${sharedMeta.price.toFixed(2)} on DigiVerse. Instant delivery, pay with USDT (BEP20) or wallet balance.`}
+          path={`/?product=${sharedMeta.id}`}
+          image={sharedMeta.image || undefined}
+        />
+      ) : (
+        <SEO />
+      )}
       <SiteHeader session={session} onSignOut={() => supabase.auth.signOut()} />
 
       <main className="flex-1">

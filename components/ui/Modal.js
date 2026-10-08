@@ -16,21 +16,21 @@ export default function Modal({ title, onClose, children, maxWidth = "max-w-md" 
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center sm:p-4">
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`${maxWidth} max-h-[90vh] w-full overflow-y-auto rounded-xl bg-surface p-6 shadow-card-hover focus:outline-none`}
+        className={`${maxWidth} max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-card-hover focus:outline-none sm:rounded-xl sm:p-6`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           {title && <h2 className="text-lg font-semibold text-ink">{title}</h2>}
           <button
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-md p-1 text-muted hover:bg-brand-soft hover:text-ink"
+            className="-m-1 rounded-md p-2.5 text-muted hover:bg-brand-soft hover:text-ink"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path

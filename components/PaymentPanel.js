@@ -15,7 +15,6 @@ export default function PaymentPanel({ order, onDone }) {
   const [txHash, setTxHash] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   useEffect(() => {
@@ -37,17 +36,6 @@ export default function PaymentPanel({ order, onDone }) {
   }, [order.payout_wallet]);
 
   const canPayWithBalance = balance !== null && balance >= Number(order.total);
-
-  async function copyAddress() {
-    try {
-      await navigator.clipboard.writeText(order.payout_wallet);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard API unavailable — silently ignore, address is
-      // still visible/selectable as text.
-    }
-  }
 
   async function payWithBalance() {
     setError("");
@@ -140,61 +128,135 @@ export default function PaymentPanel({ order, onDone }) {
     );
   }
 
+  const exactAmount = Number(order.total).toFixed(4);
+
   return (
-    <div className="space-y-4 text-sm">
-      <LinkButton onClick={() => setMethod(null)}>← Back</LinkButton>
+    <div className="space-y-5 text-sm">
+      <LinkButton onClick={() => setMethod(null)}>← Change payment method</LinkButton>
 
-      <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-muted">Amount</span>
-          <span className="font-mono text-base text-ink">
-            ${Number(order.total).toFixed(4)} USDT
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted">Network</span>
-          <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
-            BEP20 (BNB Smart Chain)
-          </span>
-        </div>
-      </div>
+      {/* Step 1 — send */}
+      <section className="rounded-xl border border-border bg-surface shadow-card">
+        <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
+          <StepBadge n={1} />
+          <h3 className="font-semibold text-ink">Send exactly this amount</h3>
+        </header>
 
-      <div className="flex items-start gap-3">
-        {qrDataUrl && (
-          <img
-            src={qrDataUrl}
-            alt="QR code for the payout wallet address"
-            className="h-24 w-24 flex-shrink-0 rounded-lg border border-border"
+        <div className="space-y-4 p-4">
+          <div className="rounded-lg bg-brand-soft p-4 text-center">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">Amount to send</p>
+            <p className="mt-1 font-mono text-3xl font-semibold text-ink">
+              {exactAmount} <span className="text-base font-medium text-muted">USDT</span>
+            </p>
+            <CopyButton value={exactAmount} label="Copy amount" className="mt-3" />
+            <p className="mt-2 text-xs text-muted">
+              Send this exact figure, including every decimal. It is how we match your payment.
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+            {qrDataUrl && (
+              <img
+                src={qrDataUrl}
+                alt="QR code for the payout wallet address"
+                className="h-36 w-36 flex-shrink-0 rounded-lg border border-border bg-white p-1"
+              />
+            )}
+            <div className="w-full flex-1 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                Wallet address
+              </p>
+              <p className="break-all rounded-lg border border-border bg-bg p-3 font-mono text-xs text-ink">
+                {order.payout_wallet}
+              </p>
+              <CopyButton value={order.payout_wallet} label="Copy address" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border px-3.5 py-2.5">
+            <span className="text-muted">Network</span>
+            <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand">
+              BEP20 (BNB Smart Chain)
+            </span>
+          </div>
+
+          <Alert variant="warning">
+            Send only <strong>USDT on BEP20</strong>. Other tokens or networks will be lost, and an
+            amount that differs from the one above can't be matched to your order.
+          </Alert>
+        </div>
+      </section>
+
+      {/* Step 2 — verify */}
+      <section className="rounded-xl border border-border bg-surface shadow-card">
+        <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
+          <StepBadge n={2} />
+          <h3 className="font-semibold text-ink">Paste your transaction hash</h3>
+        </header>
+        <div className="space-y-3 p-4">
+          <FormInput
+            value={txHash}
+            onChange={(e) => setTxHash(e.target.value.trim())}
+            placeholder="0x…"
+            className="font-mono !text-xs"
+            hint="After sending, copy the transaction hash (TxID) from your wallet or exchange."
+            aria-label="Transaction hash"
+            autoComplete="off"
+            spellCheck={false}
           />
-        )}
-        <div className="flex-1 space-y-2">
-          <p className="break-all rounded-lg border border-border bg-brand-soft p-3 font-mono text-xs text-ink">
-            {order.payout_wallet}
+          <Alert variant="error">{error}</Alert>
+          <PrimaryButton onClick={submitPayment} disabled={!txHash || busy} className="w-full">
+            {busy ? "Checking the blockchain…" : "I've sent it — verify payment"}
+          </PrimaryButton>
+          <p className="text-center text-xs text-muted">
+            Confirmation usually takes under a minute. If it says "not visible yet", wait a moment
+            and try again — your payment is safe.
           </p>
-          <SecondaryButton onClick={copyAddress} className="px-3 py-1.5 text-xs">
-            {copied ? "Copied!" : "Copy address"}
-          </SecondaryButton>
         </div>
-      </div>
-
-      <Alert variant="warning">
-        Sending on any other network will lose the funds — double-check BEP20 before sending.
-      </Alert>
-
-      <FormInput
-        label="Transaction hash"
-        value={txHash}
-        onChange={(e) => setTxHash(e.target.value)}
-        placeholder="0x…"
-        className="font-mono text-xs"
-      />
-
-      <Alert variant="error">{error}</Alert>
-
-      <PrimaryButton onClick={submitPayment} disabled={!txHash || busy} className="w-full">
-        {busy ? "Checking…" : "I've sent it — verify payment"}
-      </PrimaryButton>
+      </section>
     </div>
+  );
+}
+
+function StepBadge({ n }) {
+  return (
+    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
+      {n}
+    </span>
+  );
+}
+
+// Copies `value` and flashes "Copied!". Falls back to a hidden textarea
+// for browsers/webviews where the async clipboard API is unavailable.
+function CopyButton({ value, label, className = "" }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {}
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <SecondaryButton
+      type="button"
+      onClick={copy}
+      className={`px-3.5 py-1.5 text-xs ${copied ? "!border-success !text-success" : ""} ${className}`}
+    >
+      {copied ? "✓ Copied!" : `📋 ${label}`}
+    </SecondaryButton>
   );
 }
 

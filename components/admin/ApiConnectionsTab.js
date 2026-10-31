@@ -228,7 +228,6 @@ export default function ApiConnectionsTab({ onChanged }) {
     const hasKey = f.auth_type === "none" || f.api_key.trim() || f.key_hint;
     const canAct = busy === "" && f.base_url.trim() && hasKey;
     const canSave = busy === "" && f.label.trim() && f.base_url.trim() && hasKey;
-    const hasDocs = f.docs.trim() || f.docs_url.trim() || f.quick_start.trim();
 
     return (
       <div className="space-y-5">
@@ -282,6 +281,66 @@ export default function ApiConnectionsTab({ onChanged }) {
               onChange={set("auth_header")}
               placeholder={f.auth_type === "header" ? "X-API-Key" : "api_key"}
             />
+          )}
+        </div>
+
+        {/* ── AI auto-fill ── */}
+        <div className="rounded-xl border border-brand/30 bg-brand-soft p-5 shadow-card space-y-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold text-ink">✨ Auto-fill with AI</p>
+              <p className="mt-0.5 text-xs text-muted">
+                {data.configured
+                  ? "Paste your supplier's API docs below (or just a docs URL), and AI will fill Steps 2–4 for you."
+                  : "Add GEMINI_API_KEY in Vercel → Settings → Environment Variables, then redeploy to enable this."}
+              </p>
+            </div>
+            {data.configured && (
+              <PrimaryButton
+                onClick={() => runResearch()}
+                disabled={busy !== "" || !f.label.trim()}
+                className="shrink-0 text-sm"
+              >
+                {busy === "research"
+                  ? "Researching… (up to a minute)"
+                  : f.docs.trim() || f.docs_url.trim() || f.quick_start.trim()
+                  ? "Draft settings with AI"
+                  : "Research & auto-fill"}
+              </PrimaryButton>
+            )}
+          </div>
+          {data.configured && (
+            <div className="space-y-3">
+              <FormInput
+                label="Docs URL (optional)"
+                value={f.docs_url}
+                onChange={set("docs_url")}
+                placeholder="https://supplier.com/api-docs"
+                hint="AI will fetch and read this page automatically."
+              />
+              <FormTextarea
+                label="Paste API docs (optional)"
+                value={f.docs}
+                onChange={set("docs")}
+                rows={4}
+                placeholder="Paste endpoints, authentication examples, sample JSON responses… The more you paste, the better the result."
+              />
+              <p className="text-xs text-muted">
+                If you leave both blank, AI will search the web using the supplier name above.{" "}
+                <span className="text-brand font-medium">No API key or balance is ever sent to AI.</span>
+              </p>
+            </div>
+          )}
+          {research && (
+            <div className="rounded-lg bg-surface border border-border p-3 text-xs text-ink">
+              <span className="font-medium">AI confidence: {research.confidence}</span>
+              {research.searched ? " (used web search)" : " (used your docs)"}
+              {research.notes?.length > 0 && (
+                <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                  {research.notes.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              )}
+            </div>
           )}
         </div>
 
@@ -373,50 +432,19 @@ export default function ApiConnectionsTab({ onChanged }) {
         {/* ── Advanced ── */}
         <details className="rounded-xl border border-border bg-surface shadow-card">
           <summary className="cursor-pointer select-none px-5 py-4 text-sm font-medium text-ink">
-            ⚙️ Advanced — AI research &amp; raw settings JSON
+            ⚙️ Advanced — raw settings JSON
           </summary>
-          <div className="space-y-4 px-5 pb-5 pt-1">
+          <div className="space-y-3 px-5 pb-5 pt-2">
             <p className="text-xs text-muted">
-              Paste your supplier's API docs to let AI auto-fill the steps above. Or edit the raw JSON directly.
-              If the JSON box below has content, it overrides all steps above.
+              After AI fills the settings, the raw JSON appears here. You can also edit it directly.
+              If non-empty, it overrides Steps 2–4 above. Clear it to go back to simple mode.
             </p>
-            <FormInput
-              label="Docs URL (optional)"
-              value={f.docs_url}
-              onChange={set("docs_url")}
-              placeholder="https://supplier.com/api-docs"
-            />
-            <FormTextarea
-              label="Paste API docs (optional)"
-              value={f.docs}
-              onChange={set("docs")}
-              rows={5}
-              placeholder="Paste endpoints, authentication examples, sample JSON responses…"
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <PrimaryButton onClick={() => runResearch()} disabled={busy !== "" || !(f.label || hasDocs)}>
-                {busy === "research" ? "Researching… (up to a minute)" : hasDocs ? "Draft settings with AI" : "Research it for me (web search)"}
-              </PrimaryButton>
-              {!data.configured && <span className="text-xs text-danger">{ERR.ai_not_configured}</span>}
-            </div>
-            {research && (
-              <div className="rounded-lg bg-brand-soft p-3 text-xs text-ink">
-                <span className="font-medium">AI confidence: {research.confidence}</span>
-                {research.searched ? " (used web search)" : ""}
-                {research.notes?.length > 0 && (
-                  <ul className="mt-1 list-disc pl-4">
-                    {research.notes.map((n, i) => <li key={i}>{n}</li>)}
-                  </ul>
-                )}
-              </div>
-            )}
             <FormTextarea
               label="Raw settings JSON"
               value={f.config}
               onChange={set("config")}
               rows={12}
               className="font-mono text-xs"
-              hint="Filled by AI after research. If non-empty, overrides the steps above. Clear to go back to simple mode."
             />
           </div>
         </details>

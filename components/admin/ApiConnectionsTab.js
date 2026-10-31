@@ -4,6 +4,7 @@ import { PrimaryButton, SecondaryButton, DangerButton } from "../ui/Button";
 import Alert from "../ui/Alert";
 import { FormInput, FormSelect, FormTextarea } from "../ui/FormInput";
 import { LoadingState } from "../ui/States";
+import { parseApiDocs } from "../../lib/parseApiDocs";
 
 const EMPTY = {
   id: "",
@@ -120,6 +121,8 @@ export default function ApiConnectionsTab({ onChanged }) {
   const [msg, setMsg] = useState({ type: "", text: "" });
   const [research, setResearch] = useState(null);
   const [test, setTest] = useState(null);
+  const [smartPaste, setSmartPaste] = useState("");
+  const [smartResult, setSmartResult] = useState(null);
 
   async function load() {
     const d = await (await fetch("/api/admin/custom-suppliers")).json();
@@ -138,7 +141,27 @@ export default function ApiConnectionsTab({ onChanged }) {
     setF({ ...EMPTY });
     setResearch(null);
     setTest(null);
+    setSmartPaste("");
+    setSmartResult(null);
     setMsg({ type: "", text: "" });
+  }
+
+  function runSmartParse() {
+    const result = parseApiDocs(smartPaste);
+    setSmartResult(result);
+    if (!result._meta?.ok) return;
+    // Merge parsed values into form, keeping user-typed values where we had nothing
+    setF(prev => {
+      const next = { ...prev };
+      const skip = ["_meta", "_orderIdKey", "_isIdempotent"];
+      for (const [k, v] of Object.entries(result)) {
+        if (skip.includes(k)) continue;
+        // Only overwrite if the current value is empty / default
+        const isEmpty = !prev[k] || prev[k] === EMPTY[k];
+        if (isEmpty && v) next[k] = v;
+      }
+      return next;
+    });
   }
 
   function openEdit(s) {
@@ -158,6 +181,8 @@ export default function ApiConnectionsTab({ onChanged }) {
     });
     setResearch(null);
     setTest(null);
+    setSmartPaste("");
+    setSmartResult(null);
     setMsg({ type: "", text: "" });
   }
 
@@ -238,6 +263,50 @@ export default function ApiConnectionsTab({ onChanged }) {
           title={f.id ? `Edit ${f.label}` : "Add a supplier API"}
           description="Fill in your supplier's details — you can find these in their developer / API page."
         />
+
+        {/* ── Smart Paste (no API key needed) ── */}
+        <div className="rounded-xl border-2 border-dashed border-brand/40 bg-brand-soft p-5 shadow-card space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-ink">🧠 Smart paste — fill everything automatically</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Paste anything: API docs, endpoint URLs, example JSON responses, auth instructions.
+              No API key needed — runs fully in your browser.
+            </p>
+          </div>
+          <FormTextarea
+            label=""
+            value={smartPaste}
+            onChange={e => { setSmartPaste(e.target.value); setSmartResult(null); }}
+            rows={5}
+            placeholder={"Paste your supplier's API docs here — endpoints, auth info, sample JSON…\n\nExample:\n  GET https://supplier.com/api/reseller?action=products\n  Authorization: Bearer YOUR_API_KEY\n\n  Response: {\"products\": [{\"id\": 1, \"name\": \"...\", \"price\": 2.5}]}"}
+            className="font-mono text-xs"
+          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <PrimaryButton
+              onClick={runSmartParse}
+              disabled={!smartPaste.trim()}
+              className="shrink-0 text-sm"
+            >
+              ✨ Auto-fill from paste
+            </PrimaryButton>
+            {smartResult && (
+              <span className={`text-xs font-medium ${
+                smartResult._meta?.quality === "good" ? "text-success" :
+                smartResult._meta?.quality === "partial" ? "text-warning" : "text-error"
+              }`}>
+                {smartResult._meta?.quality === "good" ? "✓ Good match — check fields below" :
+                 smartResult._meta?.quality === "partial" ? "⚠ Partial match — review carefully" :
+                 smartResult._meta?.ok === false ? `✗ ${smartResult._meta.error}` :
+                 "⚠ Low confidence — fill manually"}
+              </span>
+            )}
+          </div>
+          {smartResult?._meta?.warnings?.length > 0 && (
+            <ul className="text-xs text-muted space-y-0.5 list-disc pl-4">
+              {smartResult._meta.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          )}
+        </div>
 
         {/* ── Step 1: Basic info ── */}
         <div className="space-y-4 rounded-xl border border-border bg-surface p-5 shadow-card">
